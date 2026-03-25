@@ -14,12 +14,12 @@ function TeamMiniCard({ team, isActive }: { team: TeamState; isActive: boolean }
     <div className={`rounded-[22px] border p-4 ${isActive ? "border-amber-500 bg-white" : "border-stone-200 bg-white/60"}`}>
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">{team.code}</h3>
-        <span className="text-xs text-stone-500">{team.playerCount}/15</span>
+        <span className="text-xs text-stone-500">{team.totalPlayers}/15</span>
       </div>
       <p className="mt-3 text-sm text-stone-600">{team.displayName}</p>
       <div className="mt-4 text-sm text-stone-700">
-        <p>Budget: {team.budgetRemaining}</p>
-        <p>Overseas: {team.overseasCount}/6</p>
+        <p>Budget: {team.budget}</p>
+        <p>Overseas: {team.overseasPlayers}/6</p>
       </div>
     </div>
   );
