@@ -1,0 +1,22 @@
+export const samplePlayers = [
+  { name: "Ruturaj Gaikwad", role: "Batter", country: "India", countryType: "INDIAN", originalTeamCode: "CSK", matchesPlayed: 0, rating: 89 },
+  { name: "Matheesha Pathirana", role: "Bowler", country: "Sri Lanka", countryType: "FOREIGN", originalTeamCode: "CSK", matchesPlayed: 0, rating: 84 },
+  { name: "Rohit Sharma", role: "Batter", country: "India", countryType: "INDIAN", originalTeamCode: "MI", matchesPlayed: 0, rating: 91 },
+  { name: "Tim David", role: "All-Rounder", country: "Australia", countryType: "FOREIGN", originalTeamCode: "MI", matchesPlayed: 0, rating: 82 },
+  { name: "Virat Kohli", role: "Batter", country: "India", countryType: "INDIAN", originalTeamCode: "RCB", matchesPlayed: 0, rating: 94 },
+  { name: "Faf du Plessis", role: "Batter", country: "South Africa", countryType: "FOREIGN", originalTeamCode: "RCB", matchesPlayed: 0, rating: 85 },
+  { name: "Rinku Singh", role: "Finisher", country: "India", countryType: "INDIAN", originalTeamCode: "KKR", matchesPlayed: 0, rating: 86 },
+  { name: "Sunil Narine", role: "All-Rounder", country: "West Indies", countryType: "FOREIGN", originalTeamCode: "KKR", matchesPlayed: 0, rating: 87 },
+  { name: "Abhishek Sharma", role: "All-Rounder", country: "India", countryType: "INDIAN", originalTeamCode: "SRH", matchesPlayed: 0, rating: 86 },
+  { name: "Heinrich Klaasen", role: "WK-Batter", country: "South Africa", countryType: "FOREIGN", originalTeamCode: "SRH", matchesPlayed: 0, rating: 88 },
+  { name: "Yashasvi Jaiswal", role: "Batter", country: "India", countryType: "INDIAN", originalTeamCode: "RR", matchesPlayed: 0, rating: 90 },
+  { name: "Jos Buttler", role: "WK-Batter", country: "England", countryType: "FOREIGN", originalTeamCode: "RR", matchesPlayed: 0, rating: 89 },
+  { name: "Rishabh Pant", role: "WK-Batter", country: "India", countryType: "INDIAN", originalTeamCode: "DC", matchesPlayed: 0, rating: 90 },
+  { name: "Tristan Stubbs", role: "Batter", country: "South Africa", countryType: "FOREIGN", originalTeamCode: "DC", matchesPlayed: 0, rating: 81 },
+  { name: "Shashank Singh", role: "Finisher", country: "India", countryType: "INDIAN", originalTeamCode: "PBKS", matchesPlayed: 0, rating: 80 },
+  { name: "Kagiso Rabada", role: "Bowler", country: "South Africa", countryType: "FOREIGN", originalTeamCode: "PBKS", matchesPlayed: 0, rating: 87 },
+  { name: "KL Rahul", role: "WK-Batter", country: "India", countryType: "INDIAN", originalTeamCode: null, matchesPlayed: 0, rating: 88 },
+  { name: "Jasprit Bumrah", role: "Bowler", country: "India", countryType: "INDIAN", originalTeamCode: null, matchesPlayed: 0, rating: 95 },
+  { name: "Mitchell Starc", role: "Bowler", country: "Australia", countryType: "FOREIGN", originalTeamCode: null, matchesPlayed: 0, rating: 90 },
+  { name: "Travis Head", role: "Batter", country: "Australia", countryType: "FOREIGN", originalTeamCode: null, matchesPlayed: 0, rating: 89 }
+];

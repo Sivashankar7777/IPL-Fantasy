@@ -1,0 +1,136 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum RoomStatus {
+  WAITING
+  RANDOMIZING
+  RETENTION
+  LIVE_AUCTION
+  COMPLETED
+}
+
+enum UserRole {
+  ADMIN
+  PLAYER
+}
+
+enum TeamCode {
+  CSK
+  MI
+  RCB
+  KKR
+  SRH
+  RR
+  DC
+  PBKS
+  LSG  // Added Lucknow Super Giants
+  GT   // Added Gujarat Titans
+}
+
+enum PlayerCountryType {
+  INDIAN
+  FOREIGN
+}
+
+enum PlayerStatus {
+  AVAILABLE
+  RETAINED
+  SOLD
+  UNSOLD
+  INJURED
+  REPLACED
+}
+
+model Room {
+  id              String      @id @default(cuid())
+  code            String      @unique
+  status          RoomStatus  @default(WAITING)
+  adminUserId     String?
+  currentPlayerId String?
+  randomizerSeed  String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  users           User[]
+  teams           Team[]
+  players         Player[]
+}
+
+model User {
+  id               String    @id @default(cuid())
+  roomId           String
+  username         String
+  socketId         String?
+  role             UserRole  @default(PLAYER)
+  budgetRemaining  Int       @default(1000)
+  retainedLocked   Boolean   @default(false)
+  assignedTeamId   String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  room             Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  assignedTeam     Team?     @relation("AssignedTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  ownedTeam        Team?     @relation("TeamOwner")
+
+  @@unique([roomId, username])
+}
+
+model Team {
+  id                       String   @id @default(cuid())
+  roomId                   String
+  ownerUserId              String?  @unique
+  code                     TeamCode
+  displayName              String
+  shortName                String
+  primaryColor             String
+  secondaryColor           String
+  logoUrl                  String?
+  totalDream11Points       Int      @default(0)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  room                     Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  owner                    User?    @relation("TeamOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  assignedUsers            User[]   @relation("AssignedTeam")
+  originalFranchisePlayers Player[] @relation("OriginalFranchisePlayers")
+  currentSquadPlayers      Player[] @relation("CurrentSquadPlayers")
+
+  @@unique([roomId, code])
+}
+
+model Player {
+  id               String            @id @default(cuid())
+  roomId           String?
+  originalTeamId   String?
+  currentTeamId    String?
+  name             String
+  role             String
+  country          String
+  countryType      PlayerCountryType
+  baseTeam         String?           
+  lot              String?
+  basePrice        Int               @default(50)
+  soldPrice        Int?
+  battingStyle     String?
+  bowlingStyle     String?
+  matchesPlayed    Int               @default(0)
+  rating           Int?
+  dream11Points    Int               @default(0)
+  statsJson        Json?
+  status           PlayerStatus      @default(AVAILABLE)
+  isRetained       Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  // CHANGED: onDelete to Cascade to prevent database bloat
+  room             Room?             @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  originalTeam     Team?             @relation("OriginalFranchisePlayers", fields: [originalTeamId], references: [id], onDelete: SetNull)
+  currentTeam      Team?             @relation("CurrentSquadPlayers", fields: [currentTeamId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, status])
+  @@index([currentTeamId])
+  @@index([originalTeamId, countryType])
+}
