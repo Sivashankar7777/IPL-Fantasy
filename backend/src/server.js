@@ -137,7 +137,7 @@ app.use((error, _req, res, _next) => {
   res.status(500).json({ ok: false, error: error.message ?? "Internal server error" });
 });
 
-const port = Number(process.env.BACKEND_PORT ?? 4000);
+const port = Number(process.env.PORT || process.env.BACKEND_PORT || 4000);
 server.listen(port, () => {
-  console.log(`Backend listening on http://localhost:${port}`);
+  console.log(`Backend listening on port ${port}`);
 });
