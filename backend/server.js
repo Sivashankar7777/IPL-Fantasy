@@ -111,10 +111,58 @@ function extractMatchIdFromScorecardUrl(scorecardUrl) {
 }
 
 function normalizePlayerDisplayName(name = '') {
-  return String(name)
+  const cleaned = String(name)
     .replace(/\s*\((wk|c)\)\s*/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  const lower = cleaned.toLowerCase();
+  const aliases = {
+    'varun chakaravarthy': 'Varun Chakravarthy',
+    'varun chakravarthy': 'Varun Chakravarthy',
+    'abishek porel': 'Abishek Porel',
+    'abhishek porel': 'Abishek Porel',
+    'b sai sudharsan': 'Sai Sudharsan',
+    'sai sudharsan': 'Sai Sudharsan',
+    'm shahrukh khan': 'M Shahrukh Khan',
+    'shahrukh khan': 'M Shahrukh Khan',
+    'vaibhav suryavanshi': 'Vaibhav Sooryavanshi',
+    'vaibhav sooryavanshi': 'Vaibhav Sooryavanshi',
+    'surya kumar yadav': 'Suryakumar Yadav',
+    'suryakumar yadav': 'Suryakumar Yadav',
+    't. natarajan': 'T Natarajan',
+    'm. siddharth': 'M Siddharth',
+    'shahbaz ahamad': 'Shahbaz Ahmed',
+    'mohammad shami': 'Mohammed Shami',
+    'abishek porel': 'Abhishek Porel',
+    'auqib dar': 'Auqib Nabi',
+  };
+
+  return aliases[lower] || cleaned;
+}
+
+function simplifyPlayerName(name = '') {
+  return normalizePlayerDisplayName(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function findBestPlayerMatch(playerName, players) {
+  const normalizedName = normalizePlayerDisplayName(playerName);
+  const simplifiedName = simplifyPlayerName(playerName);
+
+  let match = players.find((player) => normalizePlayerDisplayName(player.name).toLowerCase() === normalizedName.toLowerCase());
+  if (match) return match;
+
+  match = players.find((player) => simplifyPlayerName(player.name) === simplifiedName);
+  if (match) return match;
+
+  match = players.find((player) => {
+    const candidate = normalizePlayerDisplayName(player.name).toLowerCase();
+    return candidate.includes(normalizedName.toLowerCase()) || normalizedName.toLowerCase().includes(candidate);
+  });
+
+  return match || null;
 }
 
 function parseRunOutFielders(outString) {
@@ -318,7 +366,7 @@ try {
 }
 
 app.get('/api/player-image', async (req, res) => {
-  const name = req.query.name || 'Unknown';
+  const name = normalizePlayerDisplayName(req.query.name || 'Unknown');
   try {
     // Attempt 1: Official IPL Website Mapping
     if (playerImageMap[name] && !playerImageMap[name].includes("Default-Men.png")) {
@@ -495,6 +543,9 @@ app.post('/api/fantasy/upload-squads', upload.single('file'), async (req, res) =
 
     // Get all teams from DB to map team codes
     const allTeams = await prisma.team.findMany();
+    const allPlayers = await prisma.player.findMany({
+      select: { id: true, name: true }
+    });
     const teamMap = {}; // Maps "Chennai Super Kings" or "CSK" to "teamId"
     allTeams.forEach(t => {
       teamMap[t.displayName.toLowerCase()] = t.id;
@@ -551,14 +602,22 @@ app.post('/api/fantasy/upload-squads', upload.single('file'), async (req, res) =
             if (!isNaN(num) && num > 0) parsedPrice = num;
           }
 
-          // Use a case-insensitive 'contains' match just in case
+          const matchedPlayer = findBestPlayerMatch(playerName, allPlayers);
+          const canonicalPlayerName = normalizePlayerDisplayName(playerName);
           const updatePayload = { status: 'SOLD', currentTeamId: teamId };
           if (parsedPrice !== undefined) updatePayload.soldPrice = parsedPrice;
+          if (matchedPlayer && matchedPlayer.name !== canonicalPlayerName) {
+            updatePayload.name = canonicalPlayerName;
+          }
 
-          const result = await prisma.player.updateMany({
-            where: { name: { contains: playerName } },
-            data: updatePayload
-          });
+          let result = { count: 0 };
+          if (matchedPlayer) {
+            const updated = await prisma.player.update({
+              where: { id: matchedPlayer.id },
+              data: updatePayload
+            });
+            result = updated ? { count: 1 } : { count: 0 };
+          }
           
           if (result.count > 0) {
              mappedCount++;
