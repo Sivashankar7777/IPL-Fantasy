@@ -111,21 +111,21 @@ export default function FantasyDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#020617] text-white p-8 font-sans selection:bg-emerald-500/30">
+    <div className="min-h-screen bg-[#020617] px-3 py-4 text-white font-sans selection:bg-emerald-500/30 sm:px-5 sm:py-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         
         {/* Top App Bar Navigation */}
-        <div className="flex flex-col sm:flex-row justify-between items-center mb-8 gap-6 z-20 relative">
-          <button onClick={() => router.back()} className="group flex items-center gap-3 text-slate-400 hover:text-emerald-400 font-bold tracking-wide transition-colors">
+        <div className="relative z-20 mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <button onClick={() => router.back()} className="group flex w-full items-center justify-center gap-3 text-sm font-bold tracking-wide text-slate-400 transition-colors hover:text-emerald-400 sm:w-auto sm:justify-start sm:text-base">
             <div className="bg-slate-800/80 backdrop-blur border border-slate-700 p-2.5 rounded-full group-hover:bg-emerald-500/20 group-hover:border-emerald-500/40 transition-all shadow-lg">
               <ArrowLeft size={20} />
             </div>
             Back to Draft Room
           </button>
 
-          <div className="relative w-full sm:w-96 shadow-xl">
-            <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-              <Search size={20} className="text-slate-500" />
+          <div className="relative w-full shadow-xl sm:w-96">
+            <div className="pointer-events-none absolute inset-y-0 left-4 flex items-center sm:left-5">
+              <Search size={18} className="text-slate-500 sm:h-5 sm:w-5" />
             </div>
             <input 
               type="text" 
@@ -137,30 +137,30 @@ export default function FantasyDashboard() {
                   // Auto-expand all matching during search? That might be too complex.
                 }
               }}
-              className="w-full bg-slate-900/90 backdrop-blur border-2 border-slate-700/50 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 text-white placeholder-slate-500 font-medium rounded-full py-4 pl-14 pr-6 transition-all outline-none"
+              className="w-full rounded-full border-2 border-slate-700/50 bg-slate-900/90 py-3 pl-12 pr-4 text-sm font-medium text-white outline-none transition-all placeholder:text-slate-500 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 sm:py-4 sm:pl-14 sm:pr-6 sm:text-base"
             />
           </div>
         </div>
 
         {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-center mb-12 bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] relative overflow-hidden">
+        <div className="relative mb-8 overflow-hidden rounded-[28px] border border-slate-800 bg-slate-900 p-4 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.5)] sm:mb-12 sm:p-6 md:flex md:items-center md:justify-between lg:p-8">
           <div className="absolute -top-24 -left-24 w-64 h-64 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
           <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-emerald-500/10 blur-[100px] rounded-full pointer-events-none" />
           
-          <div className="relative z-10 flex items-center gap-4 mb-6 md:mb-0">
-            <Trophy size={48} className="text-yellow-400" />
+          <div className="relative z-10 mb-6 flex items-start gap-3 sm:items-center sm:gap-4 md:mb-0">
+            <Trophy size={40} className="mt-1 shrink-0 text-yellow-400 sm:mt-0 sm:h-12 sm:w-12" />
             <div>
-              <h1 className="text-4xl font-black tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+              <h1 className="bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-2xl font-black tracking-tight text-transparent sm:text-3xl lg:text-4xl">
                 IPL 2026 Fantasy Leaderboard
               </h1>
-              <p className="text-slate-400 font-medium uppercase tracking-widest text-sm mt-1">Post-Auction Dream11 Tracker</p>
+              <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.35em] text-slate-400 sm:text-sm sm:tracking-widest">Post-Auction Dream11 Tracker</p>
             </div>
           </div>
 
-          <div className="relative z-10 flex flex-wrap justify-end items-center gap-4">
+          <div className="relative z-10 flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-end sm:gap-4 md:w-auto">
             <button 
               onClick={() => fetchLeaderboard()}
-              className="bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-black py-3 px-6 rounded-xl text-sm border border-emerald-400/50 transition-all shadow-[0_0_20px_rgba(5,150,105,0.6)] flex items-center gap-2"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/50 bg-gradient-to-r from-emerald-600 to-teal-500 px-4 py-3 text-xs font-black text-white shadow-[0_0_20px_rgba(5,150,105,0.6)] transition-all hover:from-emerald-500 hover:to-teal-400 sm:w-auto sm:px-6 sm:text-sm"
             >
               <RefreshCw size={18} />
               SYNC LIVE POINTS
@@ -170,11 +170,11 @@ export default function FantasyDashboard() {
               <>
                 <button 
                   onClick={handleResetSquads}
-                  className="bg-slate-800 hover:bg-slate-700 text-rose-500 hover:text-rose-400 font-bold py-3 px-6 rounded-xl text-sm border border-slate-600 hover:border-rose-500/50 transition-all shadow-lg flex items-center gap-2"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-xs font-bold text-rose-500 shadow-lg transition-all hover:border-rose-500/50 hover:bg-slate-700 hover:text-rose-400 sm:w-auto sm:px-6 sm:text-sm"
                 >
                   Reset Squads
                 </button>
-                <label className={`cursor-pointer ${isUploading ? 'bg-slate-600 opacity-50' : 'bg-slate-800 hover:bg-slate-700'} text-white font-bold py-3 px-6 rounded-xl text-sm border border-slate-600 transition-all shadow-lg flex items-center gap-2`}>
+                <label className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-600 px-4 py-3 text-xs font-bold text-white shadow-lg transition-all sm:w-auto sm:px-6 sm:text-sm ${isUploading ? 'bg-slate-600 opacity-50' : 'bg-slate-800 hover:bg-slate-700'}`}>
                   {isUploading ? (
                     <>
                       <div className="animate-spin h-4 w-4 border-2 border-white/20 border-t-white rounded-full" />
@@ -199,7 +199,7 @@ export default function FantasyDashboard() {
             <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-emerald-500"></div>
           </div>
         ) : (
-          <div className="space-y-4 relative z-10">
+          <div className="relative z-10 space-y-4">
             {leaderboard.filter(team => {
               const q = searchQuery.toLowerCase();
               if (!q) return true;
@@ -211,49 +211,51 @@ export default function FantasyDashboard() {
               const isExpanded = (expandedTeamId === team.id) || (searchQuery.length > 2 && team.currentSquadPlayers?.some((p: any) => p.name?.toLowerCase().includes(searchQuery.toLowerCase())));
               
               return (
-                <div key={team.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden transition-all duration-300 shadow-lg hover:border-slate-700">
+                <div key={team.id} className="overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 shadow-lg transition-all duration-300 hover:border-slate-700">
                   {/* Team Banner / Rank Row */}
                   <div 
                     onClick={() => setExpandedTeamId(isExpanded ? null : team.id)}
-                    className="flex items-center justify-between p-6 cursor-pointer hover:bg-slate-800/50 transition-colors"
+                    className="cursor-pointer p-4 transition-colors hover:bg-slate-800/50 sm:p-5 lg:p-6"
                   >
-                    <div className="flex items-center gap-6">
-                      <div className="w-12 h-12 flex items-center justify-center bg-slate-800 border border-slate-700 rounded-full text-xl font-black text-slate-300 shadow-inner">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex items-start gap-3 sm:gap-4 lg:gap-6">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-slate-800 text-base font-black text-slate-300 shadow-inner sm:h-12 sm:w-12 sm:text-xl">
                         #{index + 1}
                       </div>
                       {LOGO_MAP[team.code] && (
-                        <div className="w-16 h-16 flex items-center justify-center p-2 bg-white rounded-full overflow-hidden shadow-[0_0_15px_rgba(255,255,255,0.15)] shrink-0">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white p-1.5 shadow-[0_0_15px_rgba(255,255,255,0.15)] sm:h-16 sm:w-16 sm:p-2">
                           <img src={LOGO_MAP[team.code]} alt={team.code} className="w-full h-full object-contain" />
                         </div>
                       )}
-                      <div>
-                        <h2 className="text-2xl font-black tracking-wide flex items-center gap-3">
+                      <div className="min-w-0">
+                        <h2 className="flex flex-wrap items-center gap-2 text-lg font-black tracking-wide sm:gap-3 sm:text-2xl">
                           {team.displayName === team.name ? team.shortName : team.displayName} 
-                          <span className="text-xs px-2 py-1 bg-slate-800 text-slate-400 rounded-md font-mono">{team.code}</span>
+                          <span className="rounded-md bg-slate-800 px-2 py-1 font-mono text-[10px] text-slate-400 sm:text-xs">{team.code}</span>
                         </h2>
-                        <p className="text-slate-500 text-sm font-semibold tracking-widest mt-1 flex items-center gap-2">
-                          <Users size={14} className="text-blue-400" /> {team.currentSquadPlayers?.length || 0} Players
+                        <p className="mt-1 flex items-center gap-2 text-[11px] font-semibold tracking-[0.25em] text-slate-500 sm:text-sm sm:tracking-widest">
+                          <Users size={14} className="shrink-0 text-blue-400" /> {team.currentSquadPlayers?.length || 0} Players
                         </p>
                       </div>
-                    </div>
+                      </div>
 
-                    <div className="flex items-center gap-8">
-                      <div className="text-right">
-                        <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Total Points</p>
-                        <p className="text-3xl font-black text-emerald-400 tabular-nums drop-shadow-[0_0_10px_rgba(5,150,105,0.3)]">
+                      <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-950/40 px-4 py-3 lg:min-w-[220px] lg:justify-end lg:gap-8 lg:border-0 lg:bg-transparent lg:px-0 lg:py-0">
+                      <div className="text-left lg:text-right">
+                        <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-400 sm:text-xs sm:tracking-widest">Total Points</p>
+                        <p className="tabular-nums text-2xl font-black text-emerald-400 drop-shadow-[0_0_10px_rgba(5,150,105,0.3)] sm:text-3xl">
                           {team.totalDream11Points?.toLocaleString() || 0} <span className="text-sm text-emerald-600 font-bold">PTS</span>
                         </p>
                       </div>
-                      <div className="text-slate-500">
+                      <div className="shrink-0 text-slate-500">
                         {isExpanded ? <ChevronUp size={24} /> : <ChevronDown size={24} />}
                       </div>
+                    </div>
                     </div>
                   </div>
 
                   {/* Expanded Squad View */}
                   {isExpanded && (
-                    <div className="border-t border-slate-800 bg-slate-950/50 p-6 shadow-inner tracking-wide">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    <div className="border-t border-slate-800 bg-slate-950/50 p-4 shadow-inner tracking-wide sm:p-6">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-5">
                         {team.currentSquadPlayers?.filter((p: any) => {
                            const q = searchQuery.toLowerCase();
                            if (!q) return true;

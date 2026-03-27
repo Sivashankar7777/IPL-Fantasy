@@ -206,7 +206,7 @@ export default function AuctionLobby() {
 
   if (!isConnected) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-950 text-white font-mono text-xl animate-pulse">
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-center text-base text-white font-mono animate-pulse sm:text-xl">
         Establishing secure connection to Auction Engine...
       </div>
     );
@@ -214,19 +214,19 @@ export default function AuctionLobby() {
 
   if (!joined) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-slate-950 text-white">
-        <div className="p-10 bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl max-w-md w-full">
-          <h1 className="text-4xl font-bold text-center mb-2 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-8 text-white">
+        <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl sm:p-10">
+          <h1 className="mb-2 text-center text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent sm:text-4xl">
             IPL MEGA AUCTION
           </h1>
-          <p className="text-slate-400 text-center mb-8">Enter your franchise owner name</p>
+          <p className="mb-8 text-center text-sm text-slate-400 sm:text-base">Enter your franchise owner name</p>
           <form onSubmit={handleJoin} className="flex flex-col gap-4">
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="e.g., Mukesh Ambani"
-              className="px-4 py-3 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:border-blue-500 text-lg text-center"
+              className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-center text-base focus:border-blue-500 focus:outline-none sm:text-lg"
               required
             />
             <input
@@ -234,10 +234,10 @@ export default function AuctionLobby() {
               value={roomCode}
               onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
               placeholder="Room Code (ex: IPL2026)"
-              className="px-4 py-3 rounded-lg bg-slate-800 border border-slate-700 focus:outline-none focus:border-blue-500 text-lg text-center font-mono uppercase tracking-widest"
+              className="rounded-lg border border-slate-700 bg-slate-800 px-4 py-3 text-center font-mono text-base uppercase tracking-widest focus:border-blue-500 focus:outline-none sm:text-lg"
               required
             />
-            <button type="submit" className="py-3 font-bold rounded-lg bg-blue-600 hover:bg-blue-500 transition-colors shadow-[0_0_15px_rgba(37,99,235,0.5)]">
+            <button type="submit" className="rounded-lg bg-blue-600 py-3 font-bold transition-colors shadow-[0_0_15px_rgba(37,99,235,0.5)] hover:bg-blue-500">
               ENTER LOBBY
             </button>
           </form>
@@ -250,7 +250,7 @@ export default function AuctionLobby() {
 
   if (phase === "LOBBY") {
     return (
-      <div className="flex h-screen flex-col items-center py-20 bg-slate-950 text-white relative">
+      <div className="relative flex min-h-screen flex-col items-center bg-slate-950 px-4 py-10 text-white sm:py-20">
         <AnimatePresence>
           {showRules && (
             <motion.div
@@ -286,15 +286,15 @@ export default function AuctionLobby() {
         </AnimatePresence>
 
         {isAdmin && (
-          <div className="absolute top-6 right-6 bg-yellow-500/20 text-yellow-500 px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 border border-yellow-500/50">
+          <div className="absolute right-4 top-4 flex items-center gap-2 rounded-full border border-yellow-500/50 bg-yellow-500/20 px-3 py-1.5 text-xs font-bold text-yellow-500 sm:right-6 sm:top-6 sm:px-4 sm:py-2 sm:text-sm">
             👑 Admin Mode
           </div>
         )}
 
-        <h2 className="text-3xl font-bold flex items-center gap-3 mb-8">
+        <h2 className="mb-8 flex flex-wrap items-center justify-center gap-3 text-center text-2xl font-bold sm:text-3xl">
           <Users className="text-blue-400" /> Waiting for Franchise Owners...
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl px-4">
+        <div className="grid w-full max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {state?.users?.map((user: any) => (
             <div key={user.userId} className="p-4 bg-slate-800 rounded-xl border border-slate-700 text-center font-semibold">
               {user.username} {user.userId === myUserId && "(You)"} {user.role === "ADMIN" && " 👑"}
@@ -303,22 +303,22 @@ export default function AuctionLobby() {
         </div>
         
         {isAdmin ? (
-          <div className="flex flex-col items-center gap-4 mt-12">
-            <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 px-6 rounded-lg text-sm border border-slate-600 transition-colors shadow-lg">
+          <div className="mt-12 flex w-full flex-col items-center gap-4">
+            <label className="cursor-pointer rounded-lg border border-slate-600 bg-slate-800 px-6 py-3 text-center text-sm font-bold text-slate-300 shadow-lg transition-colors hover:bg-slate-700">
               Upload Player Spreadsheet (Excel/CSV)
               <input type="file" className="hidden" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} />
             </label>
-            <div className="flex gap-4">
+            <div className="flex w-full max-w-2xl flex-col gap-4 sm:flex-row">
               <button 
                 onClick={handleTriggerRandomizer}
-                className="px-8 py-4 font-bold text-xl rounded-full bg-emerald-600 hover:bg-emerald-500 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(5,150,105,0.4)]"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-emerald-600 px-6 py-4 text-base font-bold transition-all shadow-[0_0_20px_rgba(5,150,105,0.4)] hover:bg-emerald-500 sm:text-xl"
               >
                 <Dices size={28} />
                 ASSIGN TEAMS
               </button>
               <button 
                 onClick={() => window.open("/dashboard?admin=true", "_blank")}
-                className="px-8 py-4 font-bold text-xl rounded-full bg-blue-600 hover:bg-blue-500 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(37,99,235,0.4)]"
+                className="flex flex-1 items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-4 text-base font-bold transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:bg-blue-500 sm:text-xl"
               >
                 <Trophy size={28} />
                 FANTASY DASHBOARD
@@ -326,11 +326,11 @@ export default function AuctionLobby() {
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-4 mt-12">
+          <div className="mt-12 flex flex-col items-center gap-4">
             <p className="text-slate-400 font-medium italic animate-pulse">Waiting for Auctioneer to start...</p>
             <button 
               onClick={() => window.open("/dashboard", "_blank")}
-              className="px-8 py-4 font-bold text-xl rounded-full border border-blue-500 text-blue-400 hover:bg-blue-900/30 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(37,99,235,0.2)]"
+              className="flex items-center gap-2 rounded-full border border-blue-500 px-6 py-4 text-base font-bold text-blue-400 shadow-[0_0_20px_rgba(37,99,235,0.2)] transition-all hover:bg-blue-900/30 sm:px-8 sm:text-xl"
             >
               <Trophy size={28} />
               FANTASY DASHBOARD
@@ -343,16 +343,16 @@ export default function AuctionLobby() {
 
   if (phase === "RANDOMIZING") {
     return (
-      <div className="flex h-screen flex-col items-center justify-center bg-slate-950 text-white overflow-hidden">
-        <h2 className="text-4xl font-black mb-12 text-yellow-400 animate-pulse">ALLOCATING FRANCHISES...</h2>
-        <div className="h-32 w-full max-w-2xl bg-slate-900 border-y-4 border-yellow-500 overflow-hidden relative flex justify-center items-center shadow-[0_0_50px_rgba(234,179,8,0.2)]">
+      <div className="flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-950 px-4 text-white">
+        <h2 className="mb-12 text-center text-2xl font-black text-yellow-400 animate-pulse sm:text-4xl">ALLOCATING FRANCHISES...</h2>
+        <div className="relative flex h-28 w-full max-w-2xl items-center justify-center overflow-hidden border-y-4 border-yellow-500 bg-slate-900 shadow-[0_0_50px_rgba(234,179,8,0.2)] sm:h-32">
           <motion.div
             animate={{ y: [0, -1000] }}
             transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
             className="flex flex-col items-center gap-8 absolute top-4"
           >
             {[...TEAM_NAMES, ...TEAM_NAMES, ...TEAM_NAMES].map((team, idx) => (
-              <div key={idx} className="text-5xl font-extrabold text-slate-300 opacity-50">{team}</div>
+              <div key={idx} className="text-center text-3xl font-extrabold text-slate-300 opacity-50 sm:text-5xl">{team}</div>
             ))}
           </motion.div>
         </div>
@@ -385,7 +385,7 @@ export default function AuctionLobby() {
 
 if (retentionLocked) {
       return (
-        <div className="flex h-screen flex-col items-center justify-center bg-slate-950 text-white p-6">
+        <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-6 text-center text-white">
           <CheckCircle2 size={80} className="text-emerald-500 mb-6" />
           <h2 className="text-3xl font-bold mb-2">Retentions Locked!</h2>
           <p className="text-slate-400 mb-12">Waiting for Admin to start the live auction...</p>
@@ -394,7 +394,7 @@ if (retentionLocked) {
           {isAdmin ? (
             <button 
               onClick={() => emitWithAck("admin_next_player", {})}
-              className="px-8 py-3 bg-red-600 hover:bg-red-500 rounded-lg font-bold shadow-lg shadow-red-500/20 transition-all active:scale-95"
+              className="rounded-lg bg-red-600 px-6 py-3 font-bold shadow-lg shadow-red-500/20 transition-all active:scale-95 hover:bg-red-500 sm:px-8"
             >
               ADMIN: START LIVE AUCTION ➔
             </button>
@@ -408,21 +408,21 @@ if (retentionLocked) {
     }
 
     return (
-      <div className="min-h-screen bg-slate-950 text-white p-8">
+      <div className="min-h-screen bg-slate-950 p-4 text-white sm:p-8">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10">
             <Trophy size={48} className="text-yellow-400 mx-auto mb-4" />
-            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600">
+            <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 sm:text-4xl">
               {myTeam?.name || myTeam?.displayName || "YOUR FRANCHISE"}
             </h1>
-            <p className="text-slate-400 mt-2">Select 1 Indian and 1 Overseas player to retain (Deducts 100 Points)</p>
+            <p className="mt-2 text-sm text-slate-400 sm:text-base">Select 1 Indian and 1 Overseas player to retain (Deducts 100 Points)</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid gap-6 md:grid-cols-2 md:gap-8">
             {/* Indian Players Column */}
-            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-              <h3 className="text-2xl font-bold mb-4 text-blue-400">Indian Players ({indianPlayers.length})</h3>
-              <div className="flex flex-col gap-3 h-96 overflow-y-auto pr-2">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+              <h3 className="mb-4 text-xl font-bold text-blue-400 sm:text-2xl">Indian Players ({indianPlayers.length})</h3>
+              <div className="flex max-h-[24rem] flex-col gap-3 overflow-y-auto pr-1 sm:pr-2">
                 {indianPlayers.map((p) => (
                   <div 
                     key={p.id} 
@@ -443,9 +443,9 @@ if (retentionLocked) {
             </div>
 
             {/* Overseas Players Column */}
-            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-              <h3 className="text-2xl font-bold mb-4 text-emerald-400">Overseas Players ({overseasPlayers.length})</h3>
-              <div className="flex flex-col gap-3 h-96 overflow-y-auto pr-2">
+            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4 sm:p-6">
+              <h3 className="mb-4 text-xl font-bold text-emerald-400 sm:text-2xl">Overseas Players ({overseasPlayers.length})</h3>
+              <div className="flex max-h-[24rem] flex-col gap-3 overflow-y-auto pr-1 sm:pr-2">
                 {overseasPlayers.map((p) => (
                   <div 
                     key={p.id} 
@@ -471,7 +471,7 @@ if (retentionLocked) {
             <button 
               onClick={submitRetention}
               disabled={!selectedIndian || !selectedOverseas}
-              className={`px-12 py-4 font-bold text-xl rounded-full transition-all shadow-lg ${
+              className={`w-full max-w-md rounded-full px-8 py-4 text-base font-bold transition-all shadow-lg sm:px-12 sm:text-xl ${
                 selectedIndian && selectedOverseas 
                   ? "bg-yellow-500 hover:bg-yellow-400 text-slate-900 hover:scale-105" 
                   : "bg-slate-800 text-slate-500 cursor-not-allowed"
@@ -530,24 +530,24 @@ if (retentionLocked) {
     };
 
     return (
-      <div className="min-h-screen bg-[#020617] text-white p-10 flex flex-col items-center overflow-y-auto">
-        <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 mb-8 text-center uppercase tracking-widest">
+      <div className="flex min-h-screen flex-col items-center overflow-y-auto bg-[#020617] p-4 text-white sm:p-10">
+        <h1 className="mb-8 text-center text-3xl font-black uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-yellow-600 sm:text-5xl">
           Auction Concluded
         </h1>
 
         {/* Action Button */}
-        <div className="flex gap-6 mb-12">
+        <div className="mb-12 flex w-full max-w-4xl flex-col gap-4 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-6">
           {myTeam && (
-            <button onClick={downloadSquad} className="px-8 py-4 bg-emerald-600 hover:bg-emerald-500 rounded-2xl font-bold shadow-lg shadow-emerald-500/30 transition-all active:scale-95 text-lg">
+            <button onClick={downloadSquad} className="rounded-2xl bg-emerald-600 px-6 py-4 text-base font-bold shadow-lg shadow-emerald-500/30 transition-all active:scale-95 hover:bg-emerald-500 sm:px-8 sm:text-lg">
               📥 Download My Squad (.txt)
             </button>
           )}
           {isAdmin && (
-            <button onClick={downloadAllSquads} className="px-8 py-4 bg-purple-600 hover:bg-purple-500 rounded-2xl font-bold shadow-lg shadow-purple-500/30 transition-all active:scale-95 text-lg">
+            <button onClick={downloadAllSquads} className="rounded-2xl bg-purple-600 px-6 py-4 text-base font-bold shadow-lg shadow-purple-500/30 transition-all active:scale-95 hover:bg-purple-500 sm:px-8 sm:text-lg">
               📊 Export All Squads (CSV)
             </button>
           )}
-          <button onClick={() => window.open(isAdmin ? "/dashboard?admin=true" : "/dashboard", "_blank")} className="px-8 py-4 border border-blue-500 text-blue-400 hover:bg-blue-900/30 rounded-2xl font-bold shadow-lg shadow-blue-500/20 transition-all active:scale-95 text-lg flex items-center gap-2">
+          <button onClick={() => window.open(isAdmin ? "/dashboard?admin=true" : "/dashboard", "_blank")} className="flex items-center justify-center gap-2 rounded-2xl border border-blue-500 px-6 py-4 text-base font-bold text-blue-400 shadow-lg shadow-blue-500/20 transition-all active:scale-95 hover:bg-blue-900/30 sm:px-8 sm:text-lg">
             <Trophy size={20} /> View Fantasy Dashboard
           </button>
         </div>
@@ -558,11 +558,11 @@ if (retentionLocked) {
             <p className="text-yellow-400 font-bold tracking-[0.3em] uppercase mb-4 flex items-center gap-2">
               <Trophy size={20} /> Marquee Purchase of the Auction
             </p>
-            <h2 className="text-5xl font-black text-white mb-2">{marqueePlayer.name}</h2>
-            <p className="text-2xl text-slate-300">{marqueePlayer.role} • {marqueePlayer.country}</p>
+            <h2 className="mb-2 text-3xl font-black text-white sm:text-5xl">{marqueePlayer.name}</h2>
+            <p className="text-lg text-slate-300 sm:text-2xl">{marqueePlayer.role} • {marqueePlayer.country}</p>
             <div className="mt-6 px-8 py-4 bg-yellow-500/20 border border-yellow-500/50 rounded-2xl">
               <p className="text-sm text-yellow-500 font-bold uppercase tracking-widest">Sold For</p>
-              <p className="text-5xl font-mono relative z-10 font-black text-yellow-400">₹{marqueePlayer.soldPrice}L</p>
+              <p className="relative z-10 text-3xl font-mono font-black text-yellow-400 sm:text-5xl">₹{marqueePlayer.soldPrice}L</p>
             </div>
           </div>
         )}
@@ -663,7 +663,7 @@ if (retentionLocked) {
     };
 
     return (
-      <div className="min-h-screen bg-[#020617] text-white p-6 flex flex-col font-sans selection:bg-yellow-500/30">
+      <div className="flex min-h-screen flex-col bg-[#020617] p-3 font-sans text-white selection:bg-yellow-500/30 sm:p-6">
         
         {/* ALL SQUADS MODAL */}
         <AnimatePresence>
@@ -672,11 +672,11 @@ if (retentionLocked) {
                initial={{ opacity: 0, y: 50 }} 
                animate={{ opacity: 1, y: 0 }} 
                exit={{ opacity: 0, y: 50 }} 
-               className="fixed inset-0 z-[100] bg-slate-950 text-white overflow-y-auto p-10"
+               className="fixed inset-0 z-[100] overflow-y-auto bg-slate-950 p-4 text-white sm:p-10"
             >
-               <div className="flex justify-between items-center mb-10 max-w-7xl mx-auto">
-                 <h1 className="text-4xl font-black flex items-center gap-4"><Users className="text-emerald-400" size={40}/> All Franchises</h1>
-                 <button onClick={() => setShowAllSquads(false)} className="px-8 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold border border-slate-700 transition shadow-[0_0_20px_rgba(255,255,255,0.05)]">Close ✖</button>
+               <div className="mx-auto mb-10 flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                 <h1 className="flex items-center gap-4 text-2xl font-black sm:text-4xl"><Users className="text-emerald-400" size={40}/> All Franchises</h1>
+                 <button onClick={() => setShowAllSquads(false)} className="rounded-xl border border-slate-700 bg-slate-800 px-6 py-3 font-bold transition shadow-[0_0_20px_rgba(255,255,255,0.05)] hover:bg-slate-700 sm:px-8">Close ✖</button>
                </div>
                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 max-w-7xl mx-auto pb-20">
                  {state?.teams?.map((team: any) => (
@@ -713,23 +713,23 @@ if (retentionLocked) {
         </div>
 
         {/* Top Navbar: Status Bar */}
-        <div className="relative z-10 flex justify-between items-center bg-white/5 backdrop-blur-xl p-5 rounded-3xl border border-white/10 mb-8 shadow-2xl">
-          <div className="flex items-center gap-6">
+        <div className="relative z-10 mb-8 flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-2xl backdrop-blur-xl sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-4 sm:gap-6">
             <div className="h-14 w-14 bg-gradient-to-br from-yellow-400 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20">
               <Trophy className="text-white" size={30} />
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-slate-400 font-bold">Current Franchise</p>
-              <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                {myTeam?.name || myTeam?.displayName || myTeam?.code || "Lobby"} {isAdmin && <span className="text-xs bg-yellow-500/20 text-yellow-500 border border-yellow-500/50 px-3 py-1 rounded-full whitespace-nowrap">👑 Admin Mode</span>}
+              <h2 className="flex flex-wrap items-center gap-2 text-lg font-black text-white sm:text-2xl">
+                {myTeam?.name || myTeam?.displayName || myTeam?.code || "Lobby"} {isAdmin && <span className="whitespace-nowrap rounded-full border border-yellow-500/50 bg-yellow-500/20 px-3 py-1 text-xs text-yellow-500">👑 Admin Mode</span>}
               </h2>
             </div>
           </div>
           
           <div className="h-12 w-[1px] bg-white/10 hidden md:block" />
 
-          <div className="flex items-center gap-6">
-            <button onClick={() => setShowAllSquads(true)} className="hidden md:flex px-6 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl font-bold text-sm transition-all shadow-lg text-slate-300">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <button onClick={() => setShowAllSquads(true)} className="flex items-center justify-center rounded-xl border border-slate-600 bg-slate-800 px-4 py-3 text-sm font-bold text-slate-300 shadow-lg transition-all hover:bg-slate-700 sm:px-6">
               <Users size={18} className="mr-2"/> View Squads
             </button>
             <div className="text-right">
@@ -750,14 +750,14 @@ if (retentionLocked) {
               )}
             </div>
           ) : (
-            <div className="w-full grid lg:grid-cols-12 gap-10 items-stretch relative z-10">
+            <div className="relative z-10 grid w-full items-stretch gap-6 lg:grid-cols-12 lg:gap-10">
               
               {/* Left: Player Poster */}
               <motion.div 
                 key={activePlayer.id}
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="lg:col-span-5 bg-white/5 backdrop-blur-md rounded-[40px] border border-white/10 p-1 shadow-2xl overflow-hidden group relative"
+                className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/5 p-1 shadow-2xl group backdrop-blur-md lg:col-span-5 lg:rounded-[40px]"
               >
                 {/* 🔨 SOLD OVERLAY */}
                 <AnimatePresence>
@@ -790,26 +790,26 @@ if (retentionLocked) {
                   )}
                 </AnimatePresence>
 
-                <div className="bg-slate-900/50 rounded-[36px] h-full p-10 flex flex-col justify-between relative">
-                  <div className="absolute top-0 right-0 p-8">
-                     <span className="px-5 py-2 bg-blue-600 rounded-full text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/40">
+                <div className="relative flex h-full flex-col justify-between rounded-[24px] bg-slate-900/50 p-6 sm:p-8 lg:rounded-[36px] lg:p-10">
+                  <div className="absolute right-0 top-0 p-5 sm:p-6 lg:p-8">
+                     <span className="rounded-full bg-blue-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-500/40 sm:px-5 sm:text-xs">
                        {activePlayer.role}
                      </span>
                   </div>
 
                   <div>
                     <p className="text-blue-400 font-black tracking-widest uppercase mb-2">{activePlayer.country}</p>
-                    <h1 className="text-6xl font-black leading-tight mb-4 uppercase">
+                    <h1 className="mb-4 break-words text-4xl font-black uppercase leading-tight sm:text-5xl lg:text-6xl">
                       {activePlayer.name.split(' ')[0]}<br/>
                       <span className="text-blue-500">{activePlayer.name.split(' ').slice(1).join(' ')}</span>
                     </h1>
-                    <div className="bg-white/5 px-4 py-2 rounded-xl border border-white/5 inline-block">
+                    <div className="inline-block rounded-xl border border-white/5 bg-white/5 px-4 py-2">
                       <p className="text-[10px] text-slate-500 uppercase font-bold">Base Price</p>
                       <p className="text-xl font-mono font-bold text-yellow-500">₹{activePlayer.basePrice}L</p>
                     </div>
                   </div>
 
-                  <div className="mt-12">
+                  <div className="mt-8 sm:mt-10 lg:mt-12">
                     <p className="text-[10px] text-slate-500 uppercase font-bold mb-2">Original Franchise</p>
                     <p className="text-xl font-bold opacity-80">{activePlayer.baseTeam || "None"}</p>
                   </div>
@@ -820,18 +820,18 @@ if (retentionLocked) {
               <div className="lg:col-span-7 flex flex-col justify-between gap-8">
                 
                 {/* Timer & Leading Bid */}
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="bg-white/5 backdrop-blur-md p-8 rounded-[32px] border border-white/10 flex flex-col items-center justify-center relative overflow-hidden">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6">
+                  <div className="relative flex flex-col items-center justify-center overflow-hidden rounded-[24px] border border-white/10 bg-white/5 p-6 backdrop-blur-md sm:rounded-[32px] sm:p-8">
                     <div className={`absolute inset-0 opacity-10 transition-colors ${timeLeft <= 5 ? 'bg-red-600' : 'bg-blue-600'}`} />
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 relative z-10">Time Left</p>
-                    <p className={`text-7xl font-mono font-black relative z-10 ${timeLeft <= 5 ? "text-red-500 animate-pulse" : "text-white"}`}>
+                    <p className={`relative z-10 text-5xl font-mono font-black sm:text-7xl ${timeLeft <= 5 ? "text-red-500 animate-pulse" : "text-white"}`}>
                       {timeLeft}<span className="text-2xl">s</span>
                     </p>
                   </div>
 
-                  <div className="bg-white/5 backdrop-blur-md p-8 rounded-[32px] border border-white/10 flex flex-col items-center justify-center">
+                  <div className="flex flex-col items-center justify-center rounded-[24px] border border-white/10 bg-white/5 p-6 backdrop-blur-md sm:rounded-[32px] sm:p-8">
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Current Bid</p>
-                    <p className="text-7xl font-mono font-black text-yellow-400">
+                    <p className="text-4xl font-mono font-black text-yellow-400 sm:text-7xl">
                       {currentBid === 0 ? '—' : `₹${currentBid}`}
                     </p>
                   </div>
@@ -855,7 +855,7 @@ if (retentionLocked) {
                 <button 
                   onClick={handleBid}
                   disabled={phase === "PAUSED" || leadingTeam?.teamId === myTeam?.teamId}
-                  className={`group relative h-32 rounded-[32px] overflow-hidden transition-all active:scale-95 ${
+                  className={`group relative h-24 overflow-hidden rounded-[24px] transition-all active:scale-95 sm:h-32 sm:rounded-[32px] ${
                     leadingTeam?.teamId === myTeam?.teamId 
                     ? 'bg-slate-800 cursor-not-allowed opacity-80' 
                     : 'bg-blue-600 hover:bg-blue-500 shadow-[0_20px_50px_rgba(37,99,235,0.3)]'
@@ -865,7 +865,7 @@ if (retentionLocked) {
                     <p className="text-xs font-black uppercase tracking-[0.3em] mb-1 opacity-70">
                       {leadingTeam?.teamId === myTeam?.teamId ? "Highest Bidder" : "Place Bid"}
                     </p>
-                    <p className="text-4xl font-black uppercase">
+                    <p className="text-2xl font-black uppercase sm:text-4xl">
                       {leadingTeam?.teamId === myTeam?.teamId ? "WINNING" : `BID ₹${nextBidAmount} L`}
                     </p>
                   </div>
