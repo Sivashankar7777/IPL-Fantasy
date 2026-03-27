@@ -7,6 +7,7 @@ import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import xlsx from 'xlsx';
 import fs from 'fs';
+import { load as loadHtml } from 'cheerio';
 
 const app = express();
 const httpServer = createServer(app);
@@ -24,6 +25,254 @@ const io = new Server(httpServer, {
     credentials: true
   }
 });
+
+function getEmptyFantasyPlayerStats() {
+  return {
+    runs: 0,
+    fours: 0,
+    sixes: 0,
+    ballsFaced: 0,
+    wickets: 0,
+    maidens: 0,
+    isBowler: false,
+    catches: 0,
+    stumpings: 0,
+    runOutsDirect: 0,
+    runOutsIndirect: 0,
+    lbwBowled: 0,
+  };
+}
+
+function creditFielder(parsedName, statKey, playerStatsMap) {
+  if (!parsedName) return;
+
+  const safeParsedName = parsedName.toLowerCase().replace(/^sub\s*\((.*?)\)$/, '$1').trim();
+  let matchedKey = Object.keys(playerStatsMap).find((fullName) => {
+    const safeFullName = fullName.toLowerCase();
+    return safeFullName.includes(safeParsedName) || safeParsedName.includes(safeFullName);
+  });
+
+  if (!matchedKey) {
+    matchedKey = parsedName;
+    playerStatsMap[matchedKey] = getEmptyFantasyPlayerStats();
+  }
+
+  playerStatsMap[matchedKey][statKey] += 1;
+}
+
+function calculateDream11Points(stats) {
+  let points = 0;
+
+  points += stats.runs;
+  points += stats.fours;
+  points += stats.sixes * 2;
+
+  if (stats.runs >= 100) points += 16;
+  else if (stats.runs >= 50) points += 8;
+  else if (stats.runs >= 30) points += 4;
+
+  if (stats.runs === 0 && stats.ballsFaced > 0 && stats.isBowler === false) {
+    points -= 2;
+  }
+
+  points += stats.wickets * 25;
+  points += stats.maidens * 12;
+
+  if (stats.wickets >= 5) points += 16;
+  else if (stats.wickets >= 4) points += 8;
+  else if (stats.wickets >= 3) points += 4;
+
+  points += stats.lbwBowled * 8;
+  points += stats.catches * 8;
+  if (stats.catches >= 3) points += 4;
+  points += stats.stumpings * 12;
+  points += stats.runOutsDirect * 12;
+  points += stats.runOutsIndirect * 6;
+
+  return points;
+}
+
+function extractMatchIdFromScorecardUrl(scorecardUrl) {
+  if (!scorecardUrl) return null;
+
+  const patterns = [
+    /\/(\d{4,})\/?(?:[#?].*)?$/,
+    /live-cricket-scorecard\/(\d{4,})/i,
+    /live-cricket-scores\/(\d{4,})/i,
+    /match(?:es)?\/(\d{4,})/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = scorecardUrl.match(pattern);
+    if (match && match[1]) return match[1];
+  }
+
+  return null;
+}
+
+function normalizePlayerDisplayName(name = '') {
+  return String(name)
+    .replace(/\s*\((wk|c)\)\s*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseRunOutFielders(outString) {
+  const match = outString.match(/^run out\s+\((.+?)\)/i);
+  if (!match || !match[1]) return [];
+
+  return match[1]
+    .split('/')
+    .map((fielder) => fielder.trim())
+    .filter(Boolean);
+}
+
+function applyDismissalFieldingPoints(outDescription, playerStatsMap) {
+  const outString = String(outDescription || '').trim();
+  const lower = outString.toLowerCase();
+
+  try {
+    if (lower.startsWith('c & b ')) {
+      const match = outString.match(/^c\s*&\s*b\s+(.+)$/i);
+      if (match && match[1]) {
+        creditFielder(match[1].trim(), 'catches', playerStatsMap);
+        creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
+      }
+      return;
+    }
+
+    if (lower.startsWith('c ')) {
+      const match = outString.match(/^c\s+(.+?)\s+b\s+/i);
+      if (match && match[1]) creditFielder(match[1].trim(), 'catches', playerStatsMap);
+      return;
+    }
+
+    if (lower.startsWith('st ')) {
+      const match = outString.match(/^st\s+(.+?)\s+b\s+/i);
+      if (match && match[1]) creditFielder(match[1].trim(), 'stumpings', playerStatsMap);
+      return;
+    }
+
+    if (lower.startsWith('run out ')) {
+      const fielders = parseRunOutFielders(outString);
+      if (fielders.length === 1) {
+        creditFielder(fielders[0], 'runOutsDirect', playerStatsMap);
+      } else {
+        fielders.forEach((fielder) => creditFielder(fielder, 'runOutsIndirect', playerStatsMap));
+      }
+    }
+  } catch {}
+}
+
+function applyBowlerDismissalPoints(outDescription, playerStatsMap) {
+  const outString = String(outDescription || '').trim();
+  const lower = outString.toLowerCase();
+
+  try {
+    if (lower.startsWith('c & b ')) {
+      const match = outString.match(/^c\s*&\s*b\s+(.+)$/i);
+      if (match && match[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
+      return;
+    }
+
+    if (lower.includes('lbw b ')) {
+      const match = outString.match(/lbw\s+b\s+(.+)$/i);
+      if (match && match[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
+      return;
+    }
+
+    if (lower.startsWith('b ')) {
+      const match = outString.match(/^b\s+(.+)$/i);
+      if (match && match[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
+    }
+  } catch {}
+}
+
+function extractScorecardStatsFromHtml(html) {
+  const $ = loadHtml(html);
+  const inningsSections = new Map();
+
+  $('div[id^="scard-team-"]').each((_, element) => {
+    const id = $(element).attr('id');
+    if (id && !inningsSections.has(id)) inningsSections.set(id, $(element));
+  });
+
+  const playerStatsMap = {};
+
+  for (const innings of inningsSections.values()) {
+    const battingRows = innings.children().eq(0).find('.scorecard-bat-grid');
+    battingRows.each((index, row) => {
+      if (index === 0) return;
+
+      const cells = $(row).children();
+      const batterCell = cells.eq(0);
+      const rawName = batterCell.find('a').first().text().trim();
+      const name = normalizePlayerDisplayName(rawName);
+      if (!name) return;
+
+      if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
+
+      const outDescription = batterCell.find('div').last().text().trim();
+      playerStatsMap[name].runs += Number(cells.eq(1).text().trim() || 0);
+      playerStatsMap[name].ballsFaced += Number(cells.eq(2).text().trim() || 0);
+      playerStatsMap[name].fours += Number(cells.eq(3).text().trim() || 0);
+      playerStatsMap[name].sixes += Number(cells.eq(4).text().trim() || 0);
+
+      applyDismissalFieldingPoints(outDescription, playerStatsMap);
+      applyBowlerDismissalPoints(outDescription, playerStatsMap);
+    });
+
+    const bowlingRows = innings.children().eq(1).find('.scorecard-bowl-grid');
+    bowlingRows.each((index, row) => {
+      if (index === 0) return;
+
+      const cells = $(row).children();
+      const name = normalizePlayerDisplayName(cells.eq(0).text().trim());
+      if (!name) return;
+
+      if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
+
+      playerStatsMap[name].maidens += Number(cells.eq(2).text().trim() || 0);
+      playerStatsMap[name].wickets += Number(cells.eq(4).text().trim() || 0);
+      playerStatsMap[name].isBowler = true;
+    });
+  }
+
+  return Object.entries(playerStatsMap).map(([name, stats]) => ({
+    name,
+    points: calculateDream11Points(stats),
+  }));
+}
+
+async function recomputeFantasyTeamTotals() {
+  const allTeams = await prisma.team.findMany({ include: { currentSquadPlayers: true } });
+  for (const team of allTeams) {
+    const totalPoints = team.currentSquadPlayers.reduce((sum, player) => sum + player.dream11Points, 0);
+    await prisma.team.update({
+      where: { id: team.id },
+      data: { totalDream11Points: totalPoints },
+    });
+  }
+}
+
+async function applyFantasyPoints(pointsData) {
+  let updatedCounter = 0;
+
+  for (const data of pointsData) {
+    const { name, points } = data;
+    if (!name || points === undefined) continue;
+
+    const result = await prisma.player.updateMany({
+      where: { name: { contains: name.trim() } },
+      data: { dream11Points: Number(points) },
+    });
+
+    if (result.count > 0) updatedCounter += result.count;
+  }
+
+  await recomputeFantasyTeamTotals();
+  return updatedCounter;
+}
 
 // A simple health check route for the home page
 app.get('/', (req, res) => {
@@ -388,6 +637,51 @@ app.post('/api/fantasy/sync-points', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Points sync failed' });
+  }
+});
+
+app.post('/api/fantasy/scorecard-sync', async (req, res) => {
+  try {
+    const { scorecardUrl } = req.body || {};
+    const matchId = extractMatchIdFromScorecardUrl(scorecardUrl);
+
+    if (!matchId) {
+      return res.status(400).json({ error: 'Could not extract a Cricbuzz match ID from the scorecard link.' });
+    }
+
+    const response = await fetch(scorecardUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch scorecard page (${response.status})`);
+    }
+
+    const html = await response.text();
+    const pointsData = extractScorecardStatsFromHtml(html);
+
+    if (!Array.isArray(pointsData) || pointsData.length === 0) {
+      return res.status(422).json({
+        error: 'No player stats could be parsed from that Cricbuzz scorecard.',
+      });
+    }
+
+    const updatedPlayers = await applyFantasyPoints(pointsData);
+
+    return res.json({
+      success: true,
+      matchId,
+      updatedPlayers,
+      source: 'scorecard-page',
+    });
+  } catch (error) {
+    console.error('Scorecard sync failed:', error);
+    return res.status(500).json({
+      error: 'Failed to sync fantasy points from scorecard link.',
+      details: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 
