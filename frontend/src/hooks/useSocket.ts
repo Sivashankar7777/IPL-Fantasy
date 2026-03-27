@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type { AuctionState } from "@/lib/types";
-
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:3001";
+import { SOCKET_URL } from "@/lib/config";
+import { mapRoomState, mapTeams } from "@/lib/socketMappers";
 
 export function useSocket() {
   const socketRef = useRef<Socket | null>(null);
@@ -14,7 +14,6 @@ export function useSocket() {
 
   useEffect(() => {
     const socket = io(SOCKET_URL, {
-      transports: ["websocket"],
       autoConnect: true,
     });
 
@@ -23,18 +22,7 @@ export function useSocket() {
     socket.on("connect", () => setIsConnected(true));
     socket.on("disconnect", () => setIsConnected(false));
     socket.on("room_state", (payload: any) => {
-      const mappedState: AuctionState = {
-        ...payload,
-        timeRemaining: payload.timeLeft ?? payload.timeRemaining ?? 15,
-        activeBid: payload.currentPlayer
-          ? {
-              player: payload.currentPlayer,
-              amount: payload.currentBid ?? 0,
-              highestBidderUserId: payload.highestBidderId ?? null,
-              bidIncrement: 10,
-            }
-          : payload.activeBid ?? null,
-      };
+      const mappedState = mapRoomState(payload);
       setState(mappedState);
       setTimeRemaining(mappedState.timeRemaining);
     });
@@ -47,7 +35,7 @@ export function useSocket() {
           ? {
               ...current,
               phase: "RETENTION",
-              teams: payload.assignments.map((entry: { team: unknown }) => entry.team),
+              teams: mapTeams(payload.assignments.map((entry: { team: unknown }) => entry.team)),
               users: current.users.map((user) => {
                 const assignment = payload.assignments.find((entry: { userId: string; team: { teamId: string } }) => entry.userId === user.userId);
                 return assignment ? { ...user, assignedTeamId: assignment.team.teamId } : user;
@@ -64,7 +52,7 @@ export function useSocket() {
               users: current.users.map((user) =>
                 user.userId === payload.userId ? { ...user, retentionLocked: payload.retentionLocked } : user
               ),
-              teams: current.teams.map((team) => (team.teamId === payload.team.teamId ? payload.team : team)),
+              teams: current.teams.map((team) => (team.teamId === payload.team.teamId ? mapTeams([payload.team])[0] : team)),
             }
           : current
       );
@@ -80,7 +68,7 @@ export function useSocket() {
                 highestBidderUserId: payload.highestBidderUserId,
                 bidIncrement: payload.bidIncrement,
               },
-              teams: payload.teams,
+              teams: mapTeams(payload.teams),
               timeRemaining: payload.timeRemaining,
             }
           : current
@@ -104,7 +92,7 @@ export function useSocket() {
                     bidIncrement: payload.bidIncrement,
                   }
                 : null,
-              teams: payload.teams ?? current.teams,
+              teams: payload.teams ? mapTeams(payload.teams) : current.teams,
               timeRemaining: payload.timeRemaining ?? 15,
             }
           : current

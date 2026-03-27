@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-const API_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:4000";
+import { BACKEND_URL } from "@/lib/config";
 
 export default function ReplacementsAdminPage() {
   const [injuredPlayerId, setInjuredPlayerId] = useState("");
@@ -15,7 +14,7 @@ export default function ReplacementsAdminPage() {
     setResult("");
 
     try {
-      const response = await fetch(`${API_URL}/api/admin/replacements`, {
+      const response = await fetch(`${BACKEND_URL}/api/admin/replacements`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

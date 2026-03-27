@@ -30,8 +30,8 @@ enum TeamCode {
   RR
   DC
   PBKS
-  LSG  // Added Lucknow Super Giants
-  GT   // Added Gujarat Titans
+  LSG // Added Lucknow Super Giants
+  GT // Added Gujarat Titans
 }
 
 enum PlayerCountryType {
@@ -49,33 +49,33 @@ enum PlayerStatus {
 }
 
 model Room {
-  id              String      @id @default(cuid())
-  code            String      @unique
-  status          RoomStatus  @default(WAITING)
+  id              String     @id @default(cuid())
+  code            String     @unique
+  status          RoomStatus @default(WAITING)
   adminUserId     String?
   currentPlayerId String?
   randomizerSeed  String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
   users           User[]
   teams           Team[]
   players         Player[]
 }
 
 model User {
-  id               String    @id @default(cuid())
-  roomId           String
-  username         String
-  socketId         String?
-  role             UserRole  @default(PLAYER)
-  budgetRemaining  Int       @default(1000)
-  retainedLocked   Boolean   @default(false)
-  assignedTeamId   String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  room             Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  assignedTeam     Team?     @relation("AssignedTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
-  ownedTeam        Team?     @relation("TeamOwner")
+  id              String   @id @default(cuid())
+  roomId          String
+  username        String
+  socketId        String?
+  role            UserRole @default(PLAYER)
+  budgetRemaining Int      @default(1000)
+  retainedLocked  Boolean  @default(false)
+  assignedTeamId  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  room            Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  assignedTeam    Team?    @relation("AssignedTeam", fields: [assignedTeamId], references: [id], onDelete: SetNull)
+  ownedTeam       Team?    @relation("TeamOwner")
 
   @@unique([roomId, username])
 }
@@ -103,32 +103,32 @@ model Team {
 }
 
 model Player {
-  id               String            @id @default(cuid())
-  roomId           String?
-  originalTeamId   String?
-  currentTeamId    String?
-  name             String
-  role             String
-  country          String
-  countryType      PlayerCountryType
-  baseTeam         String?           
-  lot              String?
-  basePrice        Int               @default(50)
-  soldPrice        Int?
-  battingStyle     String?
-  bowlingStyle     String?
-  matchesPlayed    Int               @default(0)
-  rating           Int?
-  dream11Points    Int               @default(0)
-  statsJson        Json?
-  status           PlayerStatus      @default(AVAILABLE)
-  isRetained       Boolean           @default(false)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  id             String            @id @default(cuid())
+  roomId         String?
+  originalTeamId String?
+  currentTeamId  String?
+  name           String
+  role           String
+  country        String
+  countryType    PlayerCountryType
+  baseTeam       String?
+  lot            String?
+  basePrice      Int               @default(50)
+  soldPrice      Int?
+  battingStyle   String?
+  bowlingStyle   String?
+  matchesPlayed  Int               @default(0)
+  rating         Int?
+  dream11Points  Int               @default(0)
+  statsJson      Json?
+  status         PlayerStatus      @default(AVAILABLE)
+  isRetained     Boolean           @default(false)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
   // CHANGED: onDelete to Cascade to prevent database bloat
-  room             Room?             @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  originalTeam     Team?             @relation("OriginalFranchisePlayers", fields: [originalTeamId], references: [id], onDelete: SetNull)
-  currentTeam      Team?             @relation("CurrentSquadPlayers", fields: [currentTeamId], references: [id], onDelete: SetNull)
+  room           Room?             @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  originalTeam   Team?             @relation("OriginalFranchisePlayers", fields: [originalTeamId], references: [id], onDelete: SetNull)
+  currentTeam    Team?             @relation("CurrentSquadPlayers", fields: [currentTeamId], references: [id], onDelete: SetNull)
 
   @@index([roomId, status])
   @@index([currentTeamId])

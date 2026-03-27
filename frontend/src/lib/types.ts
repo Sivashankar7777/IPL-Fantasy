@@ -19,6 +19,7 @@ export interface TeamState {
   code: string;
   displayName: string;
   name?: string;
+  shortName?: string;
   budget: number;
   totalPlayers: number;
   overseasPlayers: number;
