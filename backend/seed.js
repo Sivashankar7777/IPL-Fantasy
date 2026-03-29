@@ -51,7 +51,7 @@ const playersData = [
   { name: "Lungi Ngidi", role: "Bowler", country: "South Africa", baseTeam: "Delhi Capitals" },
   { name: "Kyle Jamieson", role: "Bowler", country: "New Zealand", baseTeam: "Delhi Capitals" },
   { name: "Karun Nair", role: "Batsman", country: "India", baseTeam: "Delhi Capitals" },
-  { name: "Abhishek Porel", role: "WK", country: "India", baseTeam: "Delhi Capitals" },
+  { name: "Abishek Porel", role: "WK", country: "India", baseTeam: "Delhi Capitals" },
   { name: "Madhav Tiwari", role: "Bowler", country: "India", baseTeam: "Delhi Capitals" },
   { name: "Tripurana Vijay", role: "All-rounder", country: "India", baseTeam: "Delhi Capitals" },
   { name: "Ajay Mandal", role: "All-rounder", country: "India", baseTeam: "Delhi Capitals" },
@@ -62,11 +62,11 @@ const playersData = [
 
   // --- GUJARAT TITANS ---
   { name: "Shubman Gill", role: "Batsman", country: "India", baseTeam: "Gujarat Titans" },
-  { name: "B Sai Sudharsan", role: "Batsman", country: "India", baseTeam: "Gujarat Titans" },
+  { name: "Sai Sudharsan", role: "Batsman", country: "India", baseTeam: "Gujarat Titans" },
   { name: "Jos Buttler", role: "WK", country: "England", baseTeam: "Gujarat Titans" },
   { name: "Washington Sundar", role: "All-rounder", country: "India", baseTeam: "Gujarat Titans" },
   { name: "Glenn Phillips", role: "Batsman", country: "New Zealand", baseTeam: "Gujarat Titans" },
-  { name: "Shahrukh Khan", role: "All-rounder", country: "India", baseTeam: "Gujarat Titans" },
+  { name: "M Shahrukh Khan", role: "All-rounder", country: "India", baseTeam: "Gujarat Titans" },
   { name: "Rahul Tewatia", role: "All-rounder", country: "India", baseTeam: "Gujarat Titans" },
   { name: "Rashid Khan", role: "Bowler", country: "Afghanistan", baseTeam: "Gujarat Titans" },
   { name: "Kagiso Rabada", role: "Bowler", country: "South Africa", baseTeam: "Gujarat Titans" },
@@ -97,7 +97,7 @@ const playersData = [
   { name: "Ramandeep Singh", role: "All-rounder", country: "India", baseTeam: "Kolkata Knight Riders" },
   { name: "Anukul Roy", role: "All-rounder", country: "India", baseTeam: "Kolkata Knight Riders" },
   { name: "Harshit Rana", role: "Bowler", country: "India", baseTeam: "Kolkata Knight Riders" },
-  { name: "Varun Chakaravarthy", role: "Bowler", country: "India", baseTeam: "Kolkata Knight Riders" },
+  { name: "Varun Chakravarthy", role: "Bowler", country: "India", baseTeam: "Kolkata Knight Riders" },
   { name: "Matheesha Pathirana", role: "Bowler", country: "Sri Lanka", baseTeam: "Kolkata Knight Riders" },
   { name: "Vaibhav Arora", role: "Bowler", country: "India", baseTeam: "Kolkata Knight Riders" },
   { name: "Rovman Powell", role: "Batsman", country: "West Indies", baseTeam: "Kolkata Knight Riders" },
@@ -197,7 +197,7 @@ const playersData = [
 
   // --- RAJASTHAN ROYALS ---
   { name: "Yashasvi Jaiswal", role: "Batsman", country: "India", baseTeam: "Rajasthan Royals" },
-  { name: "Vaibhav Suryavanshi", role: "Batsman", country: "India", baseTeam: "Rajasthan Royals" },
+  { name: "Vaibhav Sooryavanshi", role: "Batsman", country: "India", baseTeam: "Rajasthan Royals" },
   { name: "Riyan Parag", role: "All-rounder", country: "India", baseTeam: "Rajasthan Royals" },
   { name: "Dhruv Jurel", role: "WK", country: "India", baseTeam: "Rajasthan Royals" },
   { name: "Sam Curran", role: "All-rounder", country: "England", baseTeam: "Rajasthan Royals" },

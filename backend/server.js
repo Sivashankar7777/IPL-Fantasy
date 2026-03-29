@@ -1,4 +1,4 @@
-import dotenv from 'dotenv';
+import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -8,37 +8,6 @@ import multer from 'multer';
 import xlsx from 'xlsx';
 import fs from 'fs';
 import { load as loadHtml } from 'cheerio';
-
-dotenv.config({ path: new URL('./.env', import.meta.url) });
-
-const FANTASY_ROOM_CODE = 'GLOBAL_DASHBOARD';
-const FANTASY_TEAM_DEFINITIONS = [
-  { code: 'CSK', displayName: 'Chennai Super Kings', shortName: 'CSK', primaryColor: '#F9CD05', secondaryColor: '#13418B' },
-  { code: 'MI', displayName: 'Mumbai Indians', shortName: 'MI', primaryColor: '#004BA0', secondaryColor: '#D1AB3E' },
-  { code: 'RCB', displayName: 'Royal Challengers Bengaluru', shortName: 'RCB', primaryColor: '#D11D1D', secondaryColor: '#1C1C1C' },
-  { code: 'KKR', displayName: 'Kolkata Knight Riders', shortName: 'KKR', primaryColor: '#3A225D', secondaryColor: '#F2D159' },
-  { code: 'SRH', displayName: 'Sunrisers Hyderabad', shortName: 'SRH', primaryColor: '#FF822A', secondaryColor: '#000000' },
-  { code: 'RR', displayName: 'Rajasthan Royals', shortName: 'RR', primaryColor: '#EA1A85', secondaryColor: '#254AA5' },
-  { code: 'DC', displayName: 'Delhi Capitals', shortName: 'DC', primaryColor: '#004C93', secondaryColor: '#EF1B23' },
-  { code: 'PBKS', displayName: 'Punjab Kings', shortName: 'PBKS', primaryColor: '#ED1B24', secondaryColor: '#A7A9AC' },
-  { code: 'LSG', displayName: 'Lucknow Super Giants', shortName: 'LSG', primaryColor: '#254AA5', secondaryColor: '#F9CD05' },
-  { code: 'GT', displayName: 'Gujarat Titans', shortName: 'GT', primaryColor: '#1B2133', secondaryColor: '#B59E5D' },
-];
-
-function buildFallbackFantasyTeams() {
-  return FANTASY_TEAM_DEFINITIONS.map((team, index) => ({
-    id: `fallback-${team.code}`,
-    roomId: FANTASY_ROOM_CODE,
-    ownerUserId: null,
-    ...team,
-    totalDream11Points: 0,
-    createdAt: new Date(0).toISOString(),
-    updatedAt: new Date(0).toISOString(),
-    owner: null,
-    currentSquadPlayers: [],
-    rank: index + 1,
-  }));
-}
 
 const app = express();
 const httpServer = createServer(app);
@@ -57,8 +26,6 @@ const io = new Server(httpServer, {
   }
 });
 
-const RAPIDAPI_HOST = process.env.RAPIDAPI_HOST || 'cricbuzz-cricket.p.rapidapi.com';
-
 function getEmptyFantasyPlayerStats() {
   return {
     runs: 0,
@@ -76,11 +43,49 @@ function getEmptyFantasyPlayerStats() {
   };
 }
 
+function getEmptyFantasySyncMeta() {
+  return {
+    scorecardMatches: {},
+  };
+}
+
+function parsePlayerSyncMeta(statsJson) {
+  if (!statsJson || typeof statsJson !== 'object' || Array.isArray(statsJson)) {
+    return getEmptyFantasySyncMeta();
+  }
+
+  const rawMatches =
+    statsJson.scorecardMatches &&
+    typeof statsJson.scorecardMatches === 'object' &&
+    !Array.isArray(statsJson.scorecardMatches)
+      ? statsJson.scorecardMatches
+      : {};
+
+  const normalizedMatches = Object.entries(rawMatches).reduce((acc, [matchId, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      acc[matchId] = {
+        points: Number(value.points || 0),
+        appliedAt: typeof value.appliedAt === 'string' ? value.appliedAt : null,
+      };
+      return acc;
+    }
+
+    acc[matchId] = {
+      points: Number(value || 0),
+      appliedAt: null,
+    };
+    return acc;
+  }, {});
+
+  return {
+    scorecardMatches: normalizedMatches,
+  };
+}
+
 function creditFielder(parsedName, statKey, playerStatsMap) {
   if (!parsedName) return;
 
   const safeParsedName = parsedName.toLowerCase().replace(/^sub\s*\((.*?)\)$/, '$1').trim();
-
   let matchedKey = Object.keys(playerStatsMap).find((fullName) => {
     const safeFullName = fullName.toLowerCase();
     return safeFullName.includes(safeParsedName) || safeParsedName.includes(safeFullName);
@@ -134,29 +139,74 @@ function extractMatchIdFromScorecardUrl(scorecardUrl) {
     /live-cricket-scorecard\/(\d{4,})/i,
     /live-cricket-scores\/(\d{4,})/i,
     /match(?:es)?\/(\d{4,})/i,
-    /mcenter\/v1\/(\d{4,})\/hscard/i,
   ];
 
   for (const pattern of patterns) {
     const match = scorecardUrl.match(pattern);
-    if (match?.[1]) {
-      return match[1];
-    }
+    if (match && match[1]) return match[1];
   }
 
   return null;
 }
 
 function normalizePlayerDisplayName(name = '') {
-  return String(name)
+  const cleaned = String(name)
     .replace(/\s*\((wk|c)\)\s*/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+  const lower = cleaned.toLowerCase();
+  const aliases = {
+    'varun chakaravarthy': 'Varun Chakravarthy',
+    'varun chakravarthy': 'Varun Chakravarthy',
+    'abishek porel': 'Abishek Porel',
+    'abhishek porel': 'Abishek Porel',
+    'b sai sudharsan': 'Sai Sudharsan',
+    'sai sudharsan': 'Sai Sudharsan',
+    'm shahrukh khan': 'M Shahrukh Khan',
+    'shahrukh khan': 'M Shahrukh Khan',
+    'vaibhav suryavanshi': 'Vaibhav Sooryavanshi',
+    'vaibhav sooryavanshi': 'Vaibhav Sooryavanshi',
+    'surya kumar yadav': 'Suryakumar Yadav',
+    'suryakumar yadav': 'Suryakumar Yadav',
+    't. natarajan': 'T Natarajan',
+    'm. siddharth': 'M Siddharth',
+    'shahbaz ahamad': 'Shahbaz Ahmed',
+    'mohammad shami': 'Mohammed Shami',
+    'abishek porel': 'Abhishek Porel',
+    'auqib dar': 'Auqib Nabi',
+  };
+
+  return aliases[lower] || cleaned;
+}
+
+function simplifyPlayerName(name = '') {
+  return normalizePlayerDisplayName(name)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function findBestPlayerMatch(playerName, players) {
+  const normalizedName = normalizePlayerDisplayName(playerName);
+  const simplifiedName = simplifyPlayerName(playerName);
+
+  let match = players.find((player) => normalizePlayerDisplayName(player.name).toLowerCase() === normalizedName.toLowerCase());
+  if (match) return match;
+
+  match = players.find((player) => simplifyPlayerName(player.name) === simplifiedName);
+  if (match) return match;
+
+  match = players.find((player) => {
+    const candidate = normalizePlayerDisplayName(player.name).toLowerCase();
+    return candidate.includes(normalizedName.toLowerCase()) || normalizedName.toLowerCase().includes(candidate);
+  });
+
+  return match || null;
 }
 
 function parseRunOutFielders(outString) {
   const match = outString.match(/^run out\s+\((.+?)\)/i);
-  if (!match?.[1]) return [];
+  if (!match || !match[1]) return [];
 
   return match[1]
     .split('/')
@@ -171,7 +221,7 @@ function applyDismissalFieldingPoints(outDescription, playerStatsMap) {
   try {
     if (lower.startsWith('c & b ')) {
       const match = outString.match(/^c\s*&\s*b\s+(.+)$/i);
-      if (match?.[1]) {
+      if (match && match[1]) {
         creditFielder(match[1].trim(), 'catches', playerStatsMap);
         creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
       }
@@ -180,13 +230,13 @@ function applyDismissalFieldingPoints(outDescription, playerStatsMap) {
 
     if (lower.startsWith('c ')) {
       const match = outString.match(/^c\s+(.+?)\s+b\s+/i);
-      if (match?.[1]) creditFielder(match[1].trim(), 'catches', playerStatsMap);
+      if (match && match[1]) creditFielder(match[1].trim(), 'catches', playerStatsMap);
       return;
     }
 
     if (lower.startsWith('st ')) {
       const match = outString.match(/^st\s+(.+?)\s+b\s+/i);
-      if (match?.[1]) creditFielder(match[1].trim(), 'stumpings', playerStatsMap);
+      if (match && match[1]) creditFielder(match[1].trim(), 'stumpings', playerStatsMap);
       return;
     }
 
@@ -208,19 +258,19 @@ function applyBowlerDismissalPoints(outDescription, playerStatsMap) {
   try {
     if (lower.startsWith('c & b ')) {
       const match = outString.match(/^c\s*&\s*b\s+(.+)$/i);
-      if (match?.[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
+      if (match && match[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
       return;
     }
 
     if (lower.includes('lbw b ')) {
       const match = outString.match(/lbw\s+b\s+(.+)$/i);
-      if (match?.[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
+      if (match && match[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
       return;
     }
 
     if (lower.startsWith('b ')) {
       const match = outString.match(/^b\s+(.+)$/i);
-      if (match?.[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
+      if (match && match[1]) creditFielder(match[1].trim(), 'lbwBowled', playerStatsMap);
     }
   } catch {}
 }
@@ -231,9 +281,7 @@ function extractScorecardStatsFromHtml(html) {
 
   $('div[id^="scard-team-"]').each((_, element) => {
     const id = $(element).attr('id');
-    if (id && !inningsSections.has(id)) {
-      inningsSections.set(id, $(element));
-    }
+    if (id && !inningsSections.has(id)) inningsSections.set(id, $(element));
   });
 
   const playerStatsMap = {};
@@ -253,9 +301,9 @@ function extractScorecardStatsFromHtml(html) {
 
       const outDescription = batterCell.find('div').last().text().trim();
       playerStatsMap[name].runs += Number(cells.eq(1).text().trim() || 0);
+      playerStatsMap[name].ballsFaced += Number(cells.eq(2).text().trim() || 0);
       playerStatsMap[name].fours += Number(cells.eq(3).text().trim() || 0);
       playerStatsMap[name].sixes += Number(cells.eq(4).text().trim() || 0);
-      playerStatsMap[name].ballsFaced += Number(cells.eq(2).text().trim() || 0);
 
       applyDismissalFieldingPoints(outDescription, playerStatsMap);
       applyBowlerDismissalPoints(outDescription, playerStatsMap);
@@ -271,8 +319,8 @@ function extractScorecardStatsFromHtml(html) {
 
       if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
 
-      playerStatsMap[name].wickets += Number(cells.eq(4).text().trim() || 0);
       playerStatsMap[name].maidens += Number(cells.eq(2).text().trim() || 0);
+      playerStatsMap[name].wickets += Number(cells.eq(4).text().trim() || 0);
       playerStatsMap[name].isBowler = true;
     });
   }
@@ -294,20 +342,51 @@ async function recomputeFantasyTeamTotals() {
   }
 }
 
-async function applyFantasyPoints(pointsData) {
+async function applyFantasyPoints(pointsData, matchId = null) {
   let updatedCounter = 0;
+  const appliedAt = matchId ? new Date().toISOString() : null;
 
   for (const data of pointsData) {
     const { name, points } = data;
     if (!name || points === undefined) continue;
 
-    const result = await prisma.player.updateMany({
+    const players = await prisma.player.findMany({
       where: { name: { contains: name.trim() } },
-      data: { dream11Points: Number(points) },
+      select: { id: true, dream11Points: true, statsJson: true },
     });
 
-    if (result.count > 0) {
-      updatedCounter += result.count;
+    for (const player of players) {
+      const syncMeta = parsePlayerSyncMeta(player.statsJson);
+
+      if (matchId) {
+        const existingMatchPoints = Number(syncMeta.scorecardMatches[matchId]?.points || 0);
+        const nextMatchPoints = Number(points);
+        const adjustedTotal = Number(player.dream11Points || 0) - existingMatchPoints + nextMatchPoints;
+
+        await prisma.player.update({
+          where: { id: player.id },
+          data: {
+            dream11Points: adjustedTotal,
+            statsJson: {
+              ...syncMeta,
+              scorecardMatches: {
+                ...syncMeta.scorecardMatches,
+                [matchId]: {
+                  points: nextMatchPoints,
+                  appliedAt,
+                },
+              },
+            },
+          },
+        });
+      } else {
+        await prisma.player.update({
+          where: { id: player.id },
+          data: { dream11Points: Number(points) },
+        });
+      }
+
+      updatedCounter += 1;
     }
   }
 
@@ -315,84 +394,97 @@ async function applyFantasyPoints(pointsData) {
   return updatedCounter;
 }
 
-async function ensureFantasyLeaderboardBaseData() {
-  const room = await prisma.room.upsert({
-    where: { code: FANTASY_ROOM_CODE },
-    update: {},
-    create: { code: FANTASY_ROOM_CODE },
+async function undoLastScorecardSync() {
+  const players = await prisma.player.findMany({
+    where: { statsJson: { not: null } },
+    select: { id: true, dream11Points: true, statsJson: true },
   });
 
-  const existingTeams = await prisma.team.findMany({
-    where: { roomId: room.id },
-    select: { code: true },
-  });
+  let latestMatchId = null;
+  let latestAppliedAt = null;
 
-  const existingCodes = new Set(existingTeams.map((team) => team.code));
-  const missingTeams = FANTASY_TEAM_DEFINITIONS.filter((team) => !existingCodes.has(team.code));
-
-  if (missingTeams.length === 0) {
-    return;
+  for (const player of players) {
+    const syncMeta = parsePlayerSyncMeta(player.statsJson);
+    for (const [matchId, matchData] of Object.entries(syncMeta.scorecardMatches)) {
+      if (!matchData?.appliedAt) continue;
+      if (!latestAppliedAt || matchData.appliedAt > latestAppliedAt) {
+        latestAppliedAt = matchData.appliedAt;
+        latestMatchId = matchId;
+      }
+    }
   }
 
-  await prisma.team.createMany({
-    data: missingTeams.map((team) => ({
-      ...team,
-      roomId: room.id,
-    })),
-  });
+  if (!latestMatchId) {
+    return { undone: false, matchId: null, updatedPlayers: 0 };
+  }
 
-  console.log(`Initialized ${missingTeams.length} fantasy leaderboard teams in Neon.`);
-}
+  let updatedPlayers = 0;
 
-function parseUploadedPrice(rawPrice) {
-  if (!rawPrice) return undefined;
-  const num = parseInt(String(rawPrice).replace(/[^0-9]/g, ''));
-  return Number.isNaN(num) || num <= 0 ? undefined : num;
-}
+  for (const player of players) {
+    const syncMeta = parsePlayerSyncMeta(player.statsJson);
+    const matchEntry = syncMeta.scorecardMatches[latestMatchId];
+    if (!matchEntry) continue;
 
-async function upsertFantasyPlayerFromUpload({ playerName, teamId, soldPrice }) {
-  const normalizedName = playerName.trim().toLowerCase();
-  const candidatePlayers = await prisma.player.findMany({
-    where: {
-      name: {
-        contains: playerName.trim(),
-      },
-    },
-    take: 25,
-  });
+    const nextMatches = { ...syncMeta.scorecardMatches };
+    delete nextMatches[latestMatchId];
 
-  const exactPlayer =
-    candidatePlayers.find((player) => player.name.trim().toLowerCase() === normalizedName) ||
-    candidatePlayers[0];
-
-  const updatePayload = {
-    status: 'SOLD',
-    currentTeamId: teamId,
-    soldPrice: soldPrice ?? null,
-  };
-
-  if (exactPlayer) {
     await prisma.player.update({
-      where: { id: exactPlayer.id },
-      data: updatePayload,
+      where: { id: player.id },
+      data: {
+        dream11Points: Number(player.dream11Points || 0) - Number(matchEntry.points || 0),
+        statsJson: Object.keys(nextMatches).length
+          ? {
+              ...syncMeta,
+              scorecardMatches: nextMatches,
+            }
+          : null,
+      },
     });
-    return { created: false };
+
+    updatedPlayers += 1;
   }
 
-  await prisma.player.create({
-    data: {
-      name: playerName,
-      role: 'Unknown',
-      country: 'India',
-      countryType: 'INDIAN',
-      basePrice: soldPrice ?? 50,
-      soldPrice: soldPrice ?? null,
-      status: 'SOLD',
-      currentTeamId: teamId,
-    },
+  await recomputeFantasyTeamTotals();
+
+  return {
+    undone: true,
+    matchId: latestMatchId,
+    appliedAt: latestAppliedAt,
+    updatedPlayers,
+  };
+}
+
+async function getScorecardSyncStatus() {
+  const players = await prisma.player.findMany({
+    where: { statsJson: { not: null } },
+    select: { statsJson: true },
   });
 
-  return { created: true };
+  const matches = new Map();
+
+  for (const player of players) {
+    const syncMeta = parsePlayerSyncMeta(player.statsJson);
+    for (const [matchId, matchData] of Object.entries(syncMeta.scorecardMatches)) {
+      const existing = matches.get(matchId);
+      if (!existing || (matchData?.appliedAt && matchData.appliedAt > existing.appliedAt)) {
+        matches.set(matchId, {
+          matchId,
+          appliedAt: matchData?.appliedAt || null,
+        });
+      }
+    }
+  }
+
+  const allMatches = Array.from(matches.values()).sort((a, b) => {
+    const aTime = a.appliedAt || '';
+    const bTime = b.appliedAt || '';
+    return bTime.localeCompare(aTime);
+  });
+
+  return {
+    totalSyncedMatches: allMatches.length,
+    lastSyncedMatch: allMatches[0] || null,
+  };
 }
 
 // A simple health check route for the home page
@@ -439,7 +531,7 @@ try {
 }
 
 app.get('/api/player-image', async (req, res) => {
-  const name = req.query.name || 'Unknown';
+  const name = normalizePlayerDisplayName(req.query.name || 'Unknown');
   try {
     // Attempt 1: Official IPL Website Mapping
     if (playerImageMap[name] && !playerImageMap[name].includes("Default-Men.png")) {
@@ -610,14 +702,15 @@ app.post('/api/players/upload', upload.single('file'), async (req, res) => {
 app.post('/api/fantasy/upload-squads', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded.' });
-    await ensureFantasyLeaderboardBaseData();
-
     const workbook = xlsx.readFile(req.file.path);
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rawData = xlsx.utils.sheet_to_json(sheet);
 
     // Get all teams from DB to map team codes
     const allTeams = await prisma.team.findMany();
+    const allPlayers = await prisma.player.findMany({
+      select: { id: true, name: true }
+    });
     const teamMap = {}; // Maps "Chennai Super Kings" or "CSK" to "teamId"
     allTeams.forEach(t => {
       teamMap[t.displayName.toLowerCase()] = t.id;
@@ -625,7 +718,6 @@ app.post('/api/fantasy/upload-squads', upload.single('file'), async (req, res) =
     });
 
     let mappedCount = 0;
-    let createdCount = 0;
     const debugRows = [];
     const failedRows = [];
 
@@ -667,19 +759,35 @@ app.post('/api/fantasy/upload-squads', upload.single('file'), async (req, res) =
         const playerName = String(row['Player'] || row['Player Name'] || row['Name'] || Object.values(row)[1] || Object.values(row)[0] || '').trim();
 
         if (playerName && playerName !== 'undefined') {
+          // Extract Price if the user included it in the sheet
           const rawPrice = row['Price'] || row['Sold For'] || row['Final Price'] || row['Base Price'] || '';
-          const parsedPrice = parseUploadedPrice(rawPrice);
+          let parsedPrice = undefined;
+          if (rawPrice) {
+            const num = parseInt(String(rawPrice).replace(/[^0-9]/g, ''));
+            if (!isNaN(num) && num > 0) parsedPrice = num;
+          }
 
-          try {
-            const result = await upsertFantasyPlayerFromUpload({
-              playerName,
-              teamId,
-              soldPrice: parsedPrice,
+          const matchedPlayer = findBestPlayerMatch(playerName, allPlayers);
+          const canonicalPlayerName = normalizePlayerDisplayName(playerName);
+          const updatePayload = { status: 'SOLD', currentTeamId: teamId };
+          if (parsedPrice !== undefined) updatePayload.soldPrice = parsedPrice;
+          if (matchedPlayer && matchedPlayer.name !== canonicalPlayerName) {
+            updatePayload.name = canonicalPlayerName;
+          }
+
+          let result = { count: 0 };
+          if (matchedPlayer) {
+            const updated = await prisma.player.update({
+              where: { id: matchedPlayer.id },
+              data: updatePayload
             });
-            mappedCount++;
-            if (result.created) createdCount++;
-          } catch (error) {
-            failedRows.push(`Failed to import ${playerName} (Sheet: ${sheetName}): ${error.message || String(error)}`);
+            result = updated ? { count: 1 } : { count: 0 };
+          }
+          
+          if (result.count > 0) {
+             mappedCount++;
+          } else {
+             failedRows.push(`Player not found in DB: ${playerName} (Sheet: ${sheetName})`);
           }
         }
       }
@@ -689,7 +797,6 @@ app.post('/api/fantasy/upload-squads', upload.single('file'), async (req, res) =
     res.json({ 
        success: true, 
        mappedPlayers: mappedCount,
-       createdPlayers: createdCount,
        debug: debugRows,
        failed: failedRows.slice(0, 15) // Send up to 15 failures for inspection
     });
@@ -705,6 +812,7 @@ app.post('/api/fantasy/reset-squads', async (req, res) => {
     await prisma.player.updateMany({
       data: { 
         dream11Points: 0,
+        statsJson: null,
         currentTeamId: null,
         status: 'AVAILABLE',
         soldPrice: null,
@@ -724,18 +832,31 @@ app.post('/api/fantasy/reset-squads', async (req, res) => {
 
 app.post('/api/fantasy/sync-points', async (req, res) => {
   try {
-    const expectedSecret = process.env.GOOGLE_APPS_SCRIPT_SYNC_SECRET;
-    const providedSecret = req.body?.secret;
-
-    if (expectedSecret && providedSecret !== expectedSecret) {
-      return res.status(401).json({ error: 'Unauthorized sync request' });
-    }
-
     // Expected payload: [ { name: "MS Dhoni", points: 85 }, { name: "Sanju Samson", points: 104 } ]
     const { pointsData } = req.body;
     if (!Array.isArray(pointsData)) return res.status(400).json({ error: 'Invalid payload' });
 
-    const updatedCounter = await applyFantasyPoints(pointsData);
+    let updatedCounter = 0;
+    for (const data of pointsData) {
+      const { name, points } = data;
+      if (name && points !== undefined) {
+        await prisma.player.updateMany({
+           where: { name },
+           data: { dream11Points: Number(points) }
+        });
+        updatedCounter++;
+      }
+    }
+
+    // Now recalculate each Team's totalDream11Points
+    const allTeams = await prisma.team.findMany({ include: { currentSquadPlayers: true } });
+    for (const team of allTeams) {
+      const totalPoints = team.currentSquadPlayers.reduce((sum, p) => sum + p.dream11Points, 0);
+      await prisma.team.update({
+        where: { id: team.id },
+        data: { totalDream11Points: totalPoints }
+      });
+    }
 
     res.json({ success: true, updatedPlayers: updatedCounter });
   } catch (e) {
@@ -745,100 +866,40 @@ app.post('/api/fantasy/sync-points', async (req, res) => {
 });
 
 app.post('/api/fantasy/scorecard-sync', async (req, res) => {
-  const rapidApiKey = process.env.RAPIDAPI_KEY;
-  const { scorecardUrl } = req.body ?? {};
-
-  const matchId = extractMatchIdFromScorecardUrl(scorecardUrl);
-  if (!matchId) {
-    return res.status(400).json({ error: 'Could not extract a Cricbuzz match ID from the scorecard link.' });
-  }
-
   try {
-    let pointsData = [];
-    let source = 'cricbuzz-page';
+    const { scorecardUrl } = req.body || {};
+    const matchId = extractMatchIdFromScorecardUrl(scorecardUrl);
 
-    try {
-      const response = await fetch(scorecardUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-        },
-      });
-      const html = await response.text();
-      if (!response.ok) {
-        throw new Error(`Failed to fetch scorecard page (${response.status})`);
-      }
-      pointsData = extractScorecardStatsFromHtml(html);
-    } catch (pageError) {
-      if (!rapidApiKey) {
-        throw pageError;
-      }
-
-      const statsUrl = `https://${RAPIDAPI_HOST}/mcenter/v1/${matchId}/hscard`;
-      const response = await fetch(statsUrl, {
-        headers: {
-          'x-rapidapi-key': rapidApiKey,
-          'x-rapidapi-host': RAPIDAPI_HOST,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      const rawText = await response.text();
-      if (!response.ok) {
-        throw new Error(rawText || 'Failed to fetch scorecard from Cricbuzz.');
-      }
-
-      const matchStatsData = JSON.parse(rawText);
-      const playerStatsMap = {};
-
-      for (const innings of matchStatsData.scoreCard ?? []) {
-        for (const batter of Object.values(innings.batTeamDetails?.batsmenData ?? {})) {
-          const name = normalizePlayerDisplayName(batter.batName);
-          if (!name) continue;
-
-          if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
-
-          playerStatsMap[name].runs += Number(batter.runs || 0);
-          playerStatsMap[name].fours += Number(batter.fours || 0);
-          playerStatsMap[name].sixes += Number(batter.sixes || 0);
-          playerStatsMap[name].ballsFaced += Number(batter.balls || 0);
-
-          applyDismissalFieldingPoints(batter.outDesc, playerStatsMap);
-          applyBowlerDismissalPoints(batter.outDesc, playerStatsMap);
-        }
-
-        for (const bowler of Object.values(innings.bowlTeamDetails?.bowlersData ?? {})) {
-          const name = normalizePlayerDisplayName(bowler.bowlName);
-          if (!name) continue;
-
-          if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
-
-          playerStatsMap[name].wickets += Number(bowler.wickets || 0);
-          playerStatsMap[name].maidens += Number(bowler.maidens || 0);
-          playerStatsMap[name].isBowler = true;
-        }
-      }
-
-      pointsData = Object.entries(playerStatsMap).map(([name, stats]) => ({
-        name,
-        points: calculateDream11Points(stats),
-      }));
-      source = 'rapidapi';
+    if (!matchId) {
+      return res.status(400).json({ error: 'Could not extract a Cricbuzz match ID from the scorecard link.' });
     }
 
-    if (pointsData.length === 0) {
+    const response = await fetch(scorecardUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch scorecard page (${response.status})`);
+    }
+
+    const html = await response.text();
+    const pointsData = extractScorecardStatsFromHtml(html);
+
+    if (!Array.isArray(pointsData) || pointsData.length === 0) {
       return res.status(422).json({
         error: 'No player stats could be parsed from that Cricbuzz scorecard.',
       });
     }
 
-    const updatedPlayers = await applyFantasyPoints(pointsData);
+    const updatedPlayers = await applyFantasyPoints(pointsData, matchId);
 
     return res.json({
       success: true,
       matchId,
-      source,
-      calculatedPlayers: pointsData.length,
       updatedPlayers,
+      source: 'scorecard-page',
     });
   } catch (error) {
     console.error('Scorecard sync failed:', error);
@@ -849,53 +910,42 @@ app.post('/api/fantasy/scorecard-sync', async (req, res) => {
   }
 });
 
-app.post('/api/fantasy/live-sync', async (req, res) => {
-  const scriptUrl = process.env.GOOGLE_APPS_SCRIPT_SYNC_URL;
-  const scriptSecret = process.env.GOOGLE_APPS_SCRIPT_SYNC_SECRET;
-
-  if (!scriptUrl) {
-    return res.status(500).json({
-      error: 'GOOGLE_APPS_SCRIPT_SYNC_URL is not configured on the backend.',
-    });
-  }
-
+app.post('/api/fantasy/undo-last-scorecard-sync', async (req, res) => {
   try {
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        action: 'sync_live_points',
-        secret: scriptSecret || undefined,
-      }),
-    });
+    const result = await undoLastScorecardSync();
 
-    const rawText = await response.text();
-    let data;
-
-    try {
-      data = rawText ? JSON.parse(rawText) : {};
-    } catch {
-      data = { raw: rawText };
-    }
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: 'Apps Script trigger failed.',
-        details: data,
+    if (!result.undone) {
+      return res.status(404).json({
+        error: 'No previously uploaded scorecard link was found to undo.',
       });
     }
 
     return res.json({
       success: true,
-      message: 'Live sync triggered successfully.',
-      scriptResponse: data,
+      matchId: result.matchId,
+      appliedAt: result.appliedAt,
+      updatedPlayers: result.updatedPlayers,
     });
   } catch (error) {
-    console.error('Live sync trigger failed:', error);
+    console.error('Undo last scorecard sync failed:', error);
     return res.status(500).json({
-      error: 'Failed to trigger Google Apps Script sync.',
+      error: 'Failed to undo the previous scorecard link.',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+app.get('/api/fantasy/scorecard-sync-status', async (req, res) => {
+  try {
+    const status = await getScorecardSyncStatus();
+    return res.json({
+      success: true,
+      ...status,
+    });
+  } catch (error) {
+    console.error('Failed to fetch scorecard sync status:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch scorecard sync status.',
       details: error instanceof Error ? error.message : String(error),
     });
   }
@@ -914,8 +964,7 @@ app.get('/api/fantasy/leaderboard', async (req, res) => {
     });
     res.json(teams);
   } catch (error) {
-    console.error('Leaderboard fetch failed, serving fallback teams:', error);
-    res.json(buildFallbackFantasyTeams());
+    res.status(500).json({ error: 'Failed to fetch leaderboard' });
   }
 });
 
@@ -1345,21 +1394,8 @@ io.on('connection', (socket) => {
   });
 });
 
+// Start the server
 const PORT = process.env.PORT || 3001;
-
-async function startServer() {
-  try {
-    await ensureFantasyLeaderboardBaseData();
-  } catch (error) {
-    console.error('Fantasy leaderboard bootstrap skipped:', error);
-  }
-
-  httpServer.listen(PORT, () => {
-    console.log(`🚀 IPL Auction Engine running on http://localhost:${PORT}`);
-  });
-}
-
-startServer().catch((error) => {
-  console.error('Failed to start IPL Auction Engine:', error);
-  process.exit(1);
+httpServer.listen(PORT, () => {
+  console.log(`🚀 IPL Auction Engine running on http://localhost:${PORT}`);
 });
