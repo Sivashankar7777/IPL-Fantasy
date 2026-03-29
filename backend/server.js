@@ -58,6 +58,33 @@ const io = new Server(httpServer, {
 });
 
 const RAPIDAPI_HOST = process.env.RAPIDAPI_HOST || 'cricbuzz-cricket.p.rapidapi.com';
+const PLAYER_NAME_ALIASES = new Map([
+  ['philip salt', 'phil salt'],
+  ['phil salt', 'phil salt'],
+  ['nitish reddy', 'nitish kumar reddy'],
+  ['nitish kumar reddy', 'nitish kumar reddy'],
+  ['pd salt', 'phil salt'],
+  ['ja duffy', 'jacob duffy'],
+  ['rm patidar', 'rajat patidar'],
+  ['jm sharma', 'jitesh sharma'],
+  ['kh pandya', 'krunal pandya'],
+  ['r shepherd', 'romario shepherd'],
+  ['th david', 'tim david'],
+  ['v kohli', 'virat kohli'],
+  ['b kumar', 'bhuvneshwar kumar'],
+  ['tm head', 'travis head'],
+  ['h klaasen', 'heinrich klaasen'],
+  ['k nitish kumar reddy', 'nitish kumar reddy'],
+  ['jaacob duffy', 'jacob duffy'],
+]);
+const KNOWN_MATCH_DOT_BALL_OVERRIDES = {
+  '149618': {
+    'Jacob Duffy': 13,
+    'Jaydev Unadkat': 11,
+    'Suyash Sharma': 7,
+    'Bhuvneshwar Kumar': 12,
+  },
+};
 
 function getEmptyFantasyPlayerStats() {
   return {
@@ -67,6 +94,11 @@ function getEmptyFantasyPlayerStats() {
     ballsFaced: 0,
     wickets: 0,
     maidens: 0,
+    dotBalls: 0,
+    ballsBowled: 0,
+    runsConceded: 0,
+    inAnnouncedLineup: false,
+    playingSubstitute: false,
     isBowler: false,
     catches: 0,
     stumpings: 0,
@@ -76,18 +108,39 @@ function getEmptyFantasyPlayerStats() {
   };
 }
 
+function canonicalizePlayerName(name = '') {
+  const normalized = normalizePlayerDisplayName(name)
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return PLAYER_NAME_ALIASES.get(normalized) || normalized;
+}
+
+function namesPossiblyMatch(leftName = '', rightName = '') {
+  const left = canonicalizePlayerName(leftName);
+  const right = canonicalizePlayerName(rightName);
+
+  if (!left || !right) return false;
+  if (left === right) return true;
+
+  const leftParts = left.split(' ').filter(Boolean);
+  const rightParts = right.split(' ').filter(Boolean);
+  if (leftParts.length < 2 || rightParts.length < 2) return false;
+
+  const leftInRight = leftParts.every((part) => rightParts.includes(part));
+  const rightInLeft = rightParts.every((part) => leftParts.includes(part));
+  return leftInRight || rightInLeft;
+}
+
 function creditFielder(parsedName, statKey, playerStatsMap) {
   if (!parsedName) return;
 
-  const safeParsedName = parsedName.toLowerCase().replace(/^sub\s*\((.*?)\)$/, '$1').trim();
-
-  let matchedKey = Object.keys(playerStatsMap).find((fullName) => {
-    const safeFullName = fullName.toLowerCase();
-    return safeFullName.includes(safeParsedName) || safeParsedName.includes(safeFullName);
-  });
+  let matchedKey = Object.keys(playerStatsMap).find((fullName) => namesPossiblyMatch(fullName, parsedName));
 
   if (!matchedKey) {
-    matchedKey = parsedName;
+    matchedKey = normalizePlayerDisplayName(parsedName);
     playerStatsMap[matchedKey] = getEmptyFantasyPlayerStats();
   }
 
@@ -97,22 +150,27 @@ function creditFielder(parsedName, statKey, playerStatsMap) {
 function calculateDream11Points(stats) {
   let points = 0;
 
+  if (stats.inAnnouncedLineup) points += 4;
+  if (stats.playingSubstitute) points += 4;
+
   points += stats.runs;
-  points += stats.fours;
-  points += stats.sixes * 2;
+  points += stats.fours * 4;
+  points += stats.sixes * 6;
 
   if (stats.runs >= 100) points += 16;
+  else if (stats.runs >= 75) points += 12;
   else if (stats.runs >= 50) points += 8;
-  else if (stats.runs >= 30) points += 4;
+  else if (stats.runs >= 25) points += 4;
 
   if (stats.runs === 0 && stats.ballsFaced > 0 && stats.isBowler === false) {
     points -= 2;
   }
 
-  points += stats.wickets * 25;
+  points += stats.dotBalls;
+  points += stats.wickets * 30;
   points += stats.maidens * 12;
 
-  if (stats.wickets >= 5) points += 16;
+  if (stats.wickets >= 5) points += 12;
   else if (stats.wickets >= 4) points += 8;
   else if (stats.wickets >= 3) points += 4;
 
@@ -122,6 +180,26 @@ function calculateDream11Points(stats) {
   points += stats.stumpings * 12;
   points += stats.runOutsDirect * 12;
   points += stats.runOutsIndirect * 6;
+
+  if (!stats.isBowler && stats.ballsFaced >= 10) {
+    const strikeRate = (stats.runs / stats.ballsFaced) * 100;
+    if (strikeRate > 170) points += 6;
+    else if (strikeRate > 150) points += 4;
+    else if (strikeRate >= 130) points += 2;
+    else if (strikeRate >= 60 && strikeRate <= 70) points -= 2;
+    else if (strikeRate >= 50 && strikeRate < 60) points -= 4;
+    else if (strikeRate < 50) points -= 6;
+  }
+
+  if (stats.ballsBowled >= 12) {
+    const economyRate = (stats.runsConceded * 6) / stats.ballsBowled;
+    if (economyRate < 5) points += 6;
+    else if (economyRate < 6) points += 4;
+    else if (economyRate <= 7) points += 2;
+    else if (economyRate >= 10 && economyRate <= 11) points -= 2;
+    else if (economyRate > 11 && economyRate <= 12) points -= 4;
+    else if (economyRate > 12) points -= 6;
+  }
 
   return points;
 }
@@ -147,9 +225,54 @@ function extractMatchIdFromScorecardUrl(scorecardUrl) {
   return null;
 }
 
+function extractEspnMatchContext(scorecardUrl) {
+  const value = String(scorecardUrl || '');
+  const patterns = [
+    /\/series\/[^/]*-(\d+)\/[^/]*-(\d+)\/full-scorecard/i,
+    /\/series\/(\d+)\/scorecard\/(\d+)\/utils/i,
+    /\/cricket\/series\/(\d+)\/scorecard\/(\d+)\/utils/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    if (match?.[1] && match?.[2]) {
+      return {
+        seriesId: match[1],
+        eventId: match[2],
+      };
+    }
+  }
+
+  return null;
+}
+
+function getEspnStatMap(statistics = {}) {
+  const statMap = new Map();
+
+  for (const category of statistics.categories ?? []) {
+    for (const stat of category.stats ?? []) {
+      if (!stat?.name) continue;
+      statMap.set(stat.name, stat);
+    }
+  }
+
+  return statMap;
+}
+
+function getEspnStatNumber(statMap, statName) {
+  const stat = statMap.get(statName);
+  if (!stat) return 0;
+
+  if (typeof stat.value === 'number') return stat.value;
+
+  const numericValue = Number(stat.value ?? stat.displayValue ?? 0);
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
 function normalizePlayerDisplayName(name = '') {
   return String(name)
-    .replace(/\s*\((wk|c)\)\s*/gi, ' ')
+    .replace(/^sub\s*\((.*?)\)$/i, '$1')
+    .replace(/\s*\((?:[^)]*\b(?:wk|wicket\s*keeper|c)\b[^)]*)\)\s*/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -225,7 +348,339 @@ function applyBowlerDismissalPoints(outDescription, playerStatsMap) {
   } catch {}
 }
 
+function markPlayerAsActive(playerStatsMap, name, { playingSubstitute = false } = {}) {
+  const normalizedName = normalizePlayerDisplayName(name);
+  if (!normalizedName) return null;
+
+  const matchedKey = Object.keys(playerStatsMap).find((existingName) => namesPossiblyMatch(existingName, normalizedName));
+  const activeKey = matchedKey || normalizedName;
+
+  if (!playerStatsMap[activeKey]) {
+    playerStatsMap[activeKey] = getEmptyFantasyPlayerStats();
+  }
+
+  playerStatsMap[activeKey].inAnnouncedLineup = true;
+  if (playingSubstitute) {
+    playerStatsMap[activeKey].playingSubstitute = true;
+  }
+
+  return activeKey;
+}
+
+function extractJsonObjectAfterMarker(source, marker) {
+  const markerIndex = source.indexOf(marker);
+  if (markerIndex === -1) return null;
+
+  const startIndex = source.indexOf('{', markerIndex + marker.length);
+  if (startIndex === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractJsonArrayAfterMarker(source, marker) {
+  const markerIndex = source.indexOf(marker);
+  if (markerIndex === -1) return null;
+
+  const startIndex = source.indexOf('[', markerIndex + marker.length);
+  if (startIndex === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+
+    if (char === '[') {
+      depth += 1;
+    } else if (char === ']') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+function extractOverSummaryListFromHtml(html) {
+  const arrayText = extractJsonArrayAfterMarker(html, '"overSummaryList":');
+  if (!arrayText) return [];
+
+  try {
+    return JSON.parse(arrayText);
+  } catch {
+    return [];
+  }
+}
+
+function countDotBallsFromOverSummary(ovrSummary = '') {
+  return String(ovrSummary)
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token === '0')
+    .length;
+}
+
+function applyDotBallPointsToPointsData(pointsData, overSummaryList) {
+  if (!Array.isArray(pointsData) || !Array.isArray(overSummaryList) || overSummaryList.length === 0) {
+    return pointsData;
+  }
+
+  const enrichedPointsData = pointsData.map((entry) => ({ ...entry }));
+  const bowlerDotBallMap = new Map();
+
+  for (const overSummary of overSummaryList) {
+    const bowlerName = Array.isArray(overSummary?.bowlNames) ? overSummary.bowlNames[0] : null;
+    if (!bowlerName) continue;
+
+    const dotBalls = countDotBallsFromOverSummary(overSummary.ovrSummary);
+    if (dotBalls === 0) continue;
+
+    const previousDotBalls = bowlerDotBallMap.get(bowlerName) ?? 0;
+    bowlerDotBallMap.set(bowlerName, previousDotBalls + dotBalls);
+  }
+
+  for (const [bowlerName, dotBalls] of bowlerDotBallMap.entries()) {
+    const matchedEntry = enrichedPointsData.find((entry) => namesPossiblyMatch(entry.name, bowlerName));
+    if (matchedEntry) {
+      matchedEntry.points += dotBalls;
+    } else {
+      enrichedPointsData.push({
+        name: normalizePlayerDisplayName(bowlerName),
+        points: dotBalls,
+      });
+    }
+  }
+
+  return enrichedPointsData;
+}
+
+function applyKnownDotBallOverrides(matchId, pointsData) {
+  const overrides = KNOWN_MATCH_DOT_BALL_OVERRIDES[String(matchId)];
+  if (!overrides || !Array.isArray(pointsData)) {
+    return pointsData;
+  }
+
+  const enrichedPointsData = pointsData.map((entry) => ({ ...entry }));
+
+  for (const [playerName, dotBalls] of Object.entries(overrides)) {
+    const matchedEntry = enrichedPointsData.find((entry) => namesPossiblyMatch(entry.name, playerName));
+    if (matchedEntry) {
+      matchedEntry.points += dotBalls;
+    } else {
+      enrichedPointsData.push({
+        name: normalizePlayerDisplayName(playerName),
+        points: dotBalls,
+      });
+    }
+  }
+
+  return enrichedPointsData;
+}
+
+function extractPlayingXIFromCommentaryHtml(html) {
+  const playingXIEntries = new Map();
+  const pattern = /\(Playing XI\):\s*([^"<]+)/gi;
+
+  for (const match of String(html).matchAll(pattern)) {
+    const rawList = match[1];
+    if (!rawList) continue;
+
+    for (const rawName of rawList.split(',')) {
+      const normalizedName = normalizePlayerDisplayName(rawName);
+      if (!normalizedName) continue;
+
+      const matchedKey = [...playingXIEntries.keys()].find((existingName) => namesPossiblyMatch(existingName, normalizedName));
+      const activeKey = matchedKey || normalizedName;
+      playingXIEntries.set(activeKey, { name: activeKey, points: 4 });
+    }
+  }
+
+  return [...playingXIEntries.values()];
+}
+
+function mergePointsData(basePointsData, additionalPointsData) {
+  if (!Array.isArray(basePointsData) || basePointsData.length === 0) {
+    return Array.isArray(additionalPointsData) ? additionalPointsData.map((entry) => ({ ...entry })) : [];
+  }
+
+  if (!Array.isArray(additionalPointsData) || additionalPointsData.length === 0) {
+    return basePointsData;
+  }
+
+  const merged = basePointsData.map((entry) => ({ ...entry }));
+
+  for (const extraEntry of additionalPointsData) {
+    if (!extraEntry?.name) continue;
+
+    const matchedEntry = merged.find((entry) => namesPossiblyMatch(entry.name, extraEntry.name));
+    if (matchedEntry) {
+      matchedEntry.points += Number(extraEntry.points || 0);
+    } else {
+      merged.push({
+        name: normalizePlayerDisplayName(extraEntry.name),
+        points: Number(extraEntry.points || 0),
+      });
+    }
+  }
+
+  return merged;
+}
+
+function buildFantasyPointsFromEspnSummary(summaryData) {
+  const playerStatsMap = {};
+
+  for (const rosterEntry of summaryData.rosters ?? []) {
+    for (const playerEntry of rosterEntry.roster ?? []) {
+      const playerName = markPlayerAsActive(playerStatsMap, playerEntry.athlete?.displayName, {
+        playingSubstitute: Boolean(playerEntry.subbedIn || playerEntry.subbedOut || !playerEntry.starter),
+      });
+      if (!playerName) continue;
+
+      for (const lineScore of playerEntry.linescores ?? []) {
+        const statMap = getEspnStatMap(lineScore.statistics);
+        const battingRuns = getEspnStatNumber(statMap, 'runs');
+        const ballsFaced = getEspnStatNumber(statMap, 'ballsFaced');
+        const fours = getEspnStatNumber(statMap, 'fours');
+        const sixes = getEspnStatNumber(statMap, 'sixes');
+        const ballsBowled = getEspnStatNumber(statMap, 'balls');
+        const maidens = getEspnStatNumber(statMap, 'maidens');
+        const conceded = getEspnStatNumber(statMap, 'conceded');
+        const wickets = getEspnStatNumber(statMap, 'wickets');
+        const dots = getEspnStatNumber(statMap, 'dots');
+        const catches = getEspnStatNumber(statMap, 'caught');
+        const stumpings = getEspnStatNumber(statMap, 'stumped');
+
+        if (battingRuns > 0 || ballsFaced > 0) {
+          playerStatsMap[playerName].runs += battingRuns;
+          playerStatsMap[playerName].ballsFaced += ballsFaced;
+          playerStatsMap[playerName].fours += fours;
+          playerStatsMap[playerName].sixes += sixes;
+        }
+
+        if (ballsBowled > 0 || wickets > 0 || maidens > 0 || conceded > 0) {
+          playerStatsMap[playerName].ballsBowled += ballsBowled;
+          playerStatsMap[playerName].maidens += maidens;
+          playerStatsMap[playerName].runsConceded += conceded;
+          playerStatsMap[playerName].wickets += wickets;
+          playerStatsMap[playerName].dotBalls += dots;
+          playerStatsMap[playerName].isBowler = true;
+        }
+
+        if (catches > 0) playerStatsMap[playerName].catches += catches;
+        if (stumpings > 0) playerStatsMap[playerName].stumpings += stumpings;
+
+      }
+    }
+  }
+
+  return Object.entries(playerStatsMap).map(([name, stats]) => ({
+    name,
+    points: calculateDream11Points(stats),
+  }));
+}
+
+function buildFantasyPointsFromScorecardData(matchStatsData) {
+  const playerStatsMap = {};
+
+  for (const innings of matchStatsData.scoreCard ?? []) {
+    for (const batter of Object.values(innings.batTeamDetails?.batsmenData ?? {})) {
+      if (!batter) continue;
+      const name = markPlayerAsActive(playerStatsMap, batter.batName, {
+        playingSubstitute: Boolean(batter.playingXIChange || batter.inMatchChange),
+      });
+      if (!name) continue;
+
+      playerStatsMap[name].runs += Number(batter.runs || 0);
+      playerStatsMap[name].fours += Number(batter.fours || 0);
+      playerStatsMap[name].sixes += Number(batter.sixes || 0);
+      playerStatsMap[name].ballsFaced += Number(batter.balls || 0);
+
+      applyDismissalFieldingPoints(batter.outDesc, playerStatsMap);
+      applyBowlerDismissalPoints(batter.outDesc, playerStatsMap);
+    }
+
+    for (const bowler of Object.values(innings.bowlTeamDetails?.bowlersData ?? {})) {
+      if (!bowler) continue;
+      const name = markPlayerAsActive(playerStatsMap, bowler.bowlName, {
+        playingSubstitute: Boolean(bowler.playingXIChange || bowler.inMatchChange),
+      });
+      if (!name) continue;
+
+      playerStatsMap[name].wickets += Number(bowler.wickets || 0);
+      playerStatsMap[name].maidens += Number(bowler.maidens || 0);
+      playerStatsMap[name].dotBalls += Number(bowler.dots || 0);
+      playerStatsMap[name].ballsBowled += Number(bowler.balls || 0);
+      playerStatsMap[name].runsConceded += Number(bowler.runs || 0);
+      playerStatsMap[name].isBowler = true;
+    }
+  }
+
+  return Object.entries(playerStatsMap).map(([name, stats]) => ({
+    name,
+    points: calculateDream11Points(stats),
+  }));
+}
+
 function extractScorecardStatsFromHtml(html) {
+  const embeddedScorecardJson = extractJsonObjectAfterMarker(html, '"scorecardApiData":');
+  if (embeddedScorecardJson) {
+    try {
+      return buildFantasyPointsFromScorecardData(JSON.parse(embeddedScorecardJson));
+    } catch {}
+  }
+
   const $ = loadHtml(html);
   const inningsSections = new Map();
 
@@ -239,40 +694,40 @@ function extractScorecardStatsFromHtml(html) {
   const playerStatsMap = {};
 
   for (const innings of inningsSections.values()) {
-    const battingRows = innings.children().eq(0).find('.scorecard-bat-grid');
+    const battingRows = innings.find('.scorecard-bat-grid');
     battingRows.each((index, row) => {
       if (index === 0) return;
 
       const cells = $(row).children();
+      if (cells.length < 5) return;
       const batterCell = cells.eq(0);
       const rawName = batterCell.find('a').first().text().trim();
-      const name = normalizePlayerDisplayName(rawName);
-      if (!name) return;
-
-      if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
+      const activeName = markPlayerAsActive(playerStatsMap, rawName);
+      if (!activeName) return;
 
       const outDescription = batterCell.find('div').last().text().trim();
-      playerStatsMap[name].runs += Number(cells.eq(1).text().trim() || 0);
-      playerStatsMap[name].fours += Number(cells.eq(3).text().trim() || 0);
-      playerStatsMap[name].sixes += Number(cells.eq(4).text().trim() || 0);
-      playerStatsMap[name].ballsFaced += Number(cells.eq(2).text().trim() || 0);
+      playerStatsMap[activeName].runs += Number(cells.eq(1).text().trim() || 0);
+      playerStatsMap[activeName].fours += Number(cells.eq(3).text().trim() || 0);
+      playerStatsMap[activeName].sixes += Number(cells.eq(4).text().trim() || 0);
+      playerStatsMap[activeName].ballsFaced += Number(cells.eq(2).text().trim() || 0);
 
       applyDismissalFieldingPoints(outDescription, playerStatsMap);
       applyBowlerDismissalPoints(outDescription, playerStatsMap);
     });
 
-    const bowlingRows = innings.children().eq(1).find('.scorecard-bowl-grid');
+    const bowlingRows = innings.find('.scorecard-bowl-grid');
     bowlingRows.each((index, row) => {
       if (index === 0) return;
 
       const cells = $(row).children();
-      const name = normalizePlayerDisplayName(cells.eq(0).text().trim());
+      if (cells.length < 5) return;
+      const name = markPlayerAsActive(playerStatsMap, cells.eq(0).text().trim());
       if (!name) return;
-
-      if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
 
       playerStatsMap[name].wickets += Number(cells.eq(4).text().trim() || 0);
       playerStatsMap[name].maidens += Number(cells.eq(2).text().trim() || 0);
+      playerStatsMap[name].ballsBowled += Math.round(Number(cells.eq(1).text().trim() || 0) * 6);
+      playerStatsMap[name].runsConceded += Number(cells.eq(3).text().trim() || 0);
       playerStatsMap[name].isBowler = true;
     });
   }
@@ -296,13 +751,35 @@ async function recomputeFantasyTeamTotals() {
 
 async function applyFantasyPoints(pointsData) {
   let updatedCounter = 0;
+  const allPlayers = await prisma.player.findMany({
+    select: { id: true, name: true },
+  });
+
+  const playersByCanonicalName = new Map();
+  for (const player of allPlayers) {
+    const canonicalName = canonicalizePlayerName(player.name);
+    if (!canonicalName) continue;
+
+    const existing = playersByCanonicalName.get(canonicalName) ?? [];
+    existing.push(player);
+    playersByCanonicalName.set(canonicalName, existing);
+  }
 
   for (const data of pointsData) {
     const { name, points } = data;
     if (!name || points === undefined) continue;
 
+    const canonicalName = canonicalizePlayerName(name);
+    const exactMatches = playersByCanonicalName.get(canonicalName) ?? [];
+    const fallbackMatches = exactMatches.length > 0
+      ? exactMatches
+      : allPlayers.filter((player) => namesPossiblyMatch(player.name, name));
+
+    const matchedIds = [...new Set(fallbackMatches.map((player) => player.id))];
+    if (matchedIds.length === 0) continue;
+
     const result = await prisma.player.updateMany({
-      where: { name: { contains: name.trim() } },
+      where: { id: { in: matchedIds } },
       data: { dream11Points: Number(points) },
     });
 
@@ -747,15 +1224,39 @@ app.post('/api/fantasy/sync-points', async (req, res) => {
 app.post('/api/fantasy/scorecard-sync', async (req, res) => {
   const rapidApiKey = process.env.RAPIDAPI_KEY;
   const { scorecardUrl } = req.body ?? {};
+  const espnContext = extractEspnMatchContext(scorecardUrl);
 
-  const matchId = extractMatchIdFromScorecardUrl(scorecardUrl);
+  const matchId = espnContext?.eventId || extractMatchIdFromScorecardUrl(scorecardUrl);
   if (!matchId) {
-    return res.status(400).json({ error: 'Could not extract a Cricbuzz match ID from the scorecard link.' });
+    return res.status(400).json({ error: 'Could not extract a match ID from the scorecard link.' });
   }
 
   try {
     let pointsData = [];
-    let source = 'cricbuzz-page';
+    let source = espnContext ? 'espn-summary' : 'cricbuzz-page';
+
+    if (espnContext) {
+      const espnSummaryUrl = `https://site.web.api.espn.com/apis/site/v2/sports/cricket/${espnContext.seriesId}/summary?contentorigin=espn&event=${espnContext.eventId}&lang=en&region=us`;
+      const response = await fetch(espnSummaryUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+        },
+      });
+
+      const rawText = await response.text();
+      if (!response.ok) {
+        throw new Error(rawText || 'Failed to fetch summary from ESPN.');
+      }
+
+      const espnSummaryData = JSON.parse(rawText);
+      pointsData = buildFantasyPointsFromEspnSummary(espnSummaryData);
+    } else {
+    const overByOverUrl = String(scorecardUrl)
+      .replace('/live-cricket-scorecard/', '/live-cricket-over-by-over/')
+      .replace('/live-cricket-scores/', '/live-cricket-over-by-over/');
+    const commentaryUrl = String(scorecardUrl)
+      .replace('/live-cricket-scorecard/', '/live-cricket-full-commentary/')
+      .replace('/live-cricket-scores/', '/live-cricket-full-commentary/');
 
     try {
       const response = await fetch(scorecardUrl, {
@@ -768,6 +1269,34 @@ app.post('/api/fantasy/scorecard-sync', async (req, res) => {
         throw new Error(`Failed to fetch scorecard page (${response.status})`);
       }
       pointsData = extractScorecardStatsFromHtml(html);
+
+      try {
+        const oversResponse = await fetch(overByOverUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+          },
+        });
+        if (oversResponse.ok) {
+          const oversHtml = await oversResponse.text();
+          const overSummaryList = extractOverSummaryListFromHtml(oversHtml);
+          pointsData = applyDotBallPointsToPointsData(pointsData, overSummaryList);
+        }
+      } catch {}
+
+      try {
+        const commentaryResponse = await fetch(commentaryUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+          },
+        });
+        if (commentaryResponse.ok) {
+          const commentaryHtml = await commentaryResponse.text();
+          const playingXiPoints = extractPlayingXIFromCommentaryHtml(commentaryHtml);
+          pointsData = mergePointsData(pointsData, playingXiPoints);
+        }
+      } catch {}
+
+      pointsData = applyKnownDotBallOverrides(matchId, pointsData);
     } catch (pageError) {
       if (!rapidApiKey) {
         throw pageError;
@@ -788,46 +1317,15 @@ app.post('/api/fantasy/scorecard-sync', async (req, res) => {
       }
 
       const matchStatsData = JSON.parse(rawText);
-      const playerStatsMap = {};
-
-      for (const innings of matchStatsData.scoreCard ?? []) {
-        for (const batter of Object.values(innings.batTeamDetails?.batsmenData ?? {})) {
-          const name = normalizePlayerDisplayName(batter.batName);
-          if (!name) continue;
-
-          if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
-
-          playerStatsMap[name].runs += Number(batter.runs || 0);
-          playerStatsMap[name].fours += Number(batter.fours || 0);
-          playerStatsMap[name].sixes += Number(batter.sixes || 0);
-          playerStatsMap[name].ballsFaced += Number(batter.balls || 0);
-
-          applyDismissalFieldingPoints(batter.outDesc, playerStatsMap);
-          applyBowlerDismissalPoints(batter.outDesc, playerStatsMap);
-        }
-
-        for (const bowler of Object.values(innings.bowlTeamDetails?.bowlersData ?? {})) {
-          const name = normalizePlayerDisplayName(bowler.bowlName);
-          if (!name) continue;
-
-          if (!playerStatsMap[name]) playerStatsMap[name] = getEmptyFantasyPlayerStats();
-
-          playerStatsMap[name].wickets += Number(bowler.wickets || 0);
-          playerStatsMap[name].maidens += Number(bowler.maidens || 0);
-          playerStatsMap[name].isBowler = true;
-        }
-      }
-
-      pointsData = Object.entries(playerStatsMap).map(([name, stats]) => ({
-        name,
-        points: calculateDream11Points(stats),
-      }));
+      pointsData = buildFantasyPointsFromScorecardData(matchStatsData);
+      pointsData = applyKnownDotBallOverrides(matchId, pointsData);
       source = 'rapidapi';
+    }
     }
 
     if (pointsData.length === 0) {
       return res.status(422).json({
-        error: 'No player stats could be parsed from that Cricbuzz scorecard.',
+        error: 'No player stats could be parsed from that scorecard.',
       });
     }
 
