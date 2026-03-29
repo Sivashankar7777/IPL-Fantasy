@@ -37,8 +37,15 @@ export default function FantasyDashboard() {
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSyncingScorecard, setIsSyncingScorecard] = useState(false);
+  const [isUndoingLastMatch, setIsUndoingLastMatch] = useState(false);
+  const [scorecardUrl, setScorecardUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [scorecardStatus, setScorecardStatus] = useState<{
+    totalSyncedMatches: number;
+    lastSyncedMatch: { matchId: string; appliedAt: string | null } | null;
+  } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -58,8 +65,24 @@ export default function FantasyDashboard() {
     }
   };
 
+  const fetchScorecardStatus = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/fantasy/scorecard-sync-status`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.success) {
+        setScorecardStatus({
+          totalSyncedMatches: Number(data.totalSyncedMatches || 0),
+          lastSyncedMatch: data.lastSyncedMatch || null,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchLeaderboard();
+    fetchScorecardStatus();
   }, []);
 
   const handleUploadSquads = async (e: any) => {
@@ -84,6 +107,7 @@ export default function FantasyDashboard() {
           alert(`Successfully imported ${data.mappedPlayers} drafted players to their respective franchises!`);
         }
         fetchLeaderboard();
+        fetchScorecardStatus();
       } else {
         alert(`Upload Failed: ${data.error}`);
       }
@@ -102,6 +126,7 @@ export default function FantasyDashboard() {
       if (data.success) {
         alert("Success! All players have been detached and points cleared.");
         fetchLeaderboard();
+        fetchScorecardStatus();
       } else {
         alert("Failed to reset squads.");
       }
@@ -109,6 +134,70 @@ export default function FantasyDashboard() {
       alert("Network error.");
     }
   };
+
+  const handleUndoLastMatch = async () => {
+    if (!confirm("Undo only the most recently uploaded match link? This will remove just that match's points.")) return;
+
+    setIsUndoingLastMatch(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/fantasy/undo-last-scorecard-sync`, {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`Removed the latest uploaded match link (${data.matchId}).`);
+        fetchLeaderboard();
+        fetchScorecardStatus();
+      } else {
+        alert(data.error || "Failed to undo the previous match link.");
+      }
+    } catch (error: any) {
+      alert(`Network Error during undo: ${error.message}`);
+    } finally {
+      setIsUndoingLastMatch(false);
+    }
+  };
+
+  const handleScorecardSync = async () => {
+    const trimmedUrl = scorecardUrl.trim();
+    if (!trimmedUrl) {
+      alert("Please paste a Cricbuzz scorecard link first.");
+      return;
+    }
+
+    setIsSyncingScorecard(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/fantasy/scorecard-sync`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ scorecardUrl: trimmedUrl }),
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`Synced match ${data.matchId}. Updated ${data.updatedPlayers} players.`);
+        setScorecardUrl("");
+        fetchLeaderboard();
+        fetchScorecardStatus();
+      } else {
+        alert(data.error || "Failed to sync the scorecard link.");
+      }
+    } catch (error: any) {
+      alert(`Network Error during scorecard sync: ${error.message}`);
+    } finally {
+      setIsSyncingScorecard(false);
+    }
+  };
+
+  const lastSyncedLabel = scorecardStatus?.lastSyncedMatch?.appliedAt
+    ? new Date(scorecardStatus.lastSyncedMatch.appliedAt).toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : null;
 
   return (
     <div className="min-h-screen bg-[#020617] px-3 py-4 text-white font-sans selection:bg-emerald-500/30 sm:px-5 sm:py-6 lg:p-8">
@@ -174,6 +263,13 @@ export default function FantasyDashboard() {
                 >
                   Reset Squads
                 </button>
+                <button
+                  onClick={handleUndoLastMatch}
+                  disabled={isUndoingLastMatch}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-300 shadow-lg transition-all hover:border-amber-400/70 hover:bg-amber-500/20 hover:text-amber-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:px-6 sm:text-sm"
+                >
+                  {isUndoingLastMatch ? "Undoing Previous Match..." : "Undo Previous Match"}
+                </button>
                 <label className={`flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-600 px-4 py-3 text-xs font-bold text-white shadow-lg transition-all sm:w-auto sm:px-6 sm:text-sm ${isUploading ? 'bg-slate-600 opacity-50' : 'bg-slate-800 hover:bg-slate-700'}`}>
                   {isUploading ? (
                     <>
@@ -192,6 +288,49 @@ export default function FantasyDashboard() {
             )}
           </div>
         </div>
+
+        {isAdmin && (
+          <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900/80 px-4 py-3 text-sm text-slate-300 shadow-lg sm:px-5">
+            {scorecardStatus?.lastSyncedMatch ? (
+              <p>
+                Last synced match: <span className="font-bold text-emerald-300">{scorecardStatus.lastSyncedMatch.matchId}</span>
+                {" • "}
+                Active scorecard links: <span className="font-bold text-white">{scorecardStatus.totalSyncedMatches}</span>
+                {lastSyncedLabel ? ` • Synced on ${lastSyncedLabel}` : ""}
+              </p>
+            ) : (
+              <p>No scorecard links have been synced yet.</p>
+            )}
+          </div>
+        )}
+
+        {isAdmin && (
+          <div className="mb-6 rounded-3xl border border-slate-800 bg-slate-900/90 p-4 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.7)] sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+              <div className="flex-1">
+                <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-slate-400">Scorecard Sync</p>
+                <h2 className="mt-2 text-xl font-black text-white">Paste a Cricbuzz match link</h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  Each new match adds to the existing fantasy scores. Re-uploading the same match updates it without double counting.
+                </p>
+                <input
+                  type="text"
+                  value={scorecardUrl}
+                  onChange={(event) => setScorecardUrl(event.target.value)}
+                  placeholder="https://www.cricbuzz.com/live-cricket-scorecard/..."
+                  className="mt-4 w-full rounded-2xl border border-slate-700 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none transition-all placeholder:text-slate-500 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10"
+                />
+              </div>
+              <button
+                onClick={handleScorecardSync}
+                disabled={isSyncingScorecard}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-emerald-400/50 bg-gradient-to-r from-emerald-600 to-teal-500 px-5 py-3 text-sm font-black text-white shadow-[0_0_20px_rgba(5,150,105,0.35)] transition-all hover:from-emerald-500 hover:to-teal-400 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
+              >
+                {isSyncingScorecard ? "Syncing Match Link..." : "Sync Match Link"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Leaderboard List */}
         {loading ? (

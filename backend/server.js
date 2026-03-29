@@ -43,6 +43,45 @@ function getEmptyFantasyPlayerStats() {
   };
 }
 
+function getEmptyFantasySyncMeta() {
+  return {
+    scorecardMatches: {},
+  };
+}
+
+function parsePlayerSyncMeta(statsJson) {
+  if (!statsJson || typeof statsJson !== 'object' || Array.isArray(statsJson)) {
+    return getEmptyFantasySyncMeta();
+  }
+
+  const rawMatches =
+    statsJson.scorecardMatches &&
+    typeof statsJson.scorecardMatches === 'object' &&
+    !Array.isArray(statsJson.scorecardMatches)
+      ? statsJson.scorecardMatches
+      : {};
+
+  const normalizedMatches = Object.entries(rawMatches).reduce((acc, [matchId, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      acc[matchId] = {
+        points: Number(value.points || 0),
+        appliedAt: typeof value.appliedAt === 'string' ? value.appliedAt : null,
+      };
+      return acc;
+    }
+
+    acc[matchId] = {
+      points: Number(value || 0),
+      appliedAt: null,
+    };
+    return acc;
+  }, {});
+
+  return {
+    scorecardMatches: normalizedMatches,
+  };
+}
+
 function creditFielder(parsedName, statKey, playerStatsMap) {
   if (!parsedName) return;
 
@@ -303,23 +342,149 @@ async function recomputeFantasyTeamTotals() {
   }
 }
 
-async function applyFantasyPoints(pointsData) {
+async function applyFantasyPoints(pointsData, matchId = null) {
   let updatedCounter = 0;
+  const appliedAt = matchId ? new Date().toISOString() : null;
 
   for (const data of pointsData) {
     const { name, points } = data;
     if (!name || points === undefined) continue;
 
-    const result = await prisma.player.updateMany({
+    const players = await prisma.player.findMany({
       where: { name: { contains: name.trim() } },
-      data: { dream11Points: Number(points) },
+      select: { id: true, dream11Points: true, statsJson: true },
     });
 
-    if (result.count > 0) updatedCounter += result.count;
+    for (const player of players) {
+      const syncMeta = parsePlayerSyncMeta(player.statsJson);
+
+      if (matchId) {
+        const existingMatchPoints = Number(syncMeta.scorecardMatches[matchId]?.points || 0);
+        const nextMatchPoints = Number(points);
+        const adjustedTotal = Number(player.dream11Points || 0) - existingMatchPoints + nextMatchPoints;
+
+        await prisma.player.update({
+          where: { id: player.id },
+          data: {
+            dream11Points: adjustedTotal,
+            statsJson: {
+              ...syncMeta,
+              scorecardMatches: {
+                ...syncMeta.scorecardMatches,
+                [matchId]: {
+                  points: nextMatchPoints,
+                  appliedAt,
+                },
+              },
+            },
+          },
+        });
+      } else {
+        await prisma.player.update({
+          where: { id: player.id },
+          data: { dream11Points: Number(points) },
+        });
+      }
+
+      updatedCounter += 1;
+    }
   }
 
   await recomputeFantasyTeamTotals();
   return updatedCounter;
+}
+
+async function undoLastScorecardSync() {
+  const players = await prisma.player.findMany({
+    where: { statsJson: { not: null } },
+    select: { id: true, dream11Points: true, statsJson: true },
+  });
+
+  let latestMatchId = null;
+  let latestAppliedAt = null;
+
+  for (const player of players) {
+    const syncMeta = parsePlayerSyncMeta(player.statsJson);
+    for (const [matchId, matchData] of Object.entries(syncMeta.scorecardMatches)) {
+      if (!matchData?.appliedAt) continue;
+      if (!latestAppliedAt || matchData.appliedAt > latestAppliedAt) {
+        latestAppliedAt = matchData.appliedAt;
+        latestMatchId = matchId;
+      }
+    }
+  }
+
+  if (!latestMatchId) {
+    return { undone: false, matchId: null, updatedPlayers: 0 };
+  }
+
+  let updatedPlayers = 0;
+
+  for (const player of players) {
+    const syncMeta = parsePlayerSyncMeta(player.statsJson);
+    const matchEntry = syncMeta.scorecardMatches[latestMatchId];
+    if (!matchEntry) continue;
+
+    const nextMatches = { ...syncMeta.scorecardMatches };
+    delete nextMatches[latestMatchId];
+
+    await prisma.player.update({
+      where: { id: player.id },
+      data: {
+        dream11Points: Number(player.dream11Points || 0) - Number(matchEntry.points || 0),
+        statsJson: Object.keys(nextMatches).length
+          ? {
+              ...syncMeta,
+              scorecardMatches: nextMatches,
+            }
+          : null,
+      },
+    });
+
+    updatedPlayers += 1;
+  }
+
+  await recomputeFantasyTeamTotals();
+
+  return {
+    undone: true,
+    matchId: latestMatchId,
+    appliedAt: latestAppliedAt,
+    updatedPlayers,
+  };
+}
+
+async function getScorecardSyncStatus() {
+  const players = await prisma.player.findMany({
+    where: { statsJson: { not: null } },
+    select: { statsJson: true },
+  });
+
+  const matches = new Map();
+
+  for (const player of players) {
+    const syncMeta = parsePlayerSyncMeta(player.statsJson);
+    for (const [matchId, matchData] of Object.entries(syncMeta.scorecardMatches)) {
+      const existing = matches.get(matchId);
+      if (!existing || (matchData?.appliedAt && matchData.appliedAt > existing.appliedAt)) {
+        matches.set(matchId, {
+          matchId,
+          appliedAt: matchData?.appliedAt || null,
+        });
+      }
+    }
+  }
+
+  const allMatches = Array.from(matches.values()).sort((a, b) => {
+    const aTime = a.appliedAt || '';
+    const bTime = b.appliedAt || '';
+    return bTime.localeCompare(aTime);
+  });
+
+  return {
+    totalSyncedMatches: allMatches.length,
+    lastSyncedMatch: allMatches[0] || null,
+  };
 }
 
 // A simple health check route for the home page
@@ -647,6 +812,7 @@ app.post('/api/fantasy/reset-squads', async (req, res) => {
     await prisma.player.updateMany({
       data: { 
         dream11Points: 0,
+        statsJson: null,
         currentTeamId: null,
         status: 'AVAILABLE',
         soldPrice: null,
@@ -727,7 +893,7 @@ app.post('/api/fantasy/scorecard-sync', async (req, res) => {
       });
     }
 
-    const updatedPlayers = await applyFantasyPoints(pointsData);
+    const updatedPlayers = await applyFantasyPoints(pointsData, matchId);
 
     return res.json({
       success: true,
@@ -739,6 +905,47 @@ app.post('/api/fantasy/scorecard-sync', async (req, res) => {
     console.error('Scorecard sync failed:', error);
     return res.status(500).json({
       error: 'Failed to sync fantasy points from scorecard link.',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+app.post('/api/fantasy/undo-last-scorecard-sync', async (req, res) => {
+  try {
+    const result = await undoLastScorecardSync();
+
+    if (!result.undone) {
+      return res.status(404).json({
+        error: 'No previously uploaded scorecard link was found to undo.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      matchId: result.matchId,
+      appliedAt: result.appliedAt,
+      updatedPlayers: result.updatedPlayers,
+    });
+  } catch (error) {
+    console.error('Undo last scorecard sync failed:', error);
+    return res.status(500).json({
+      error: 'Failed to undo the previous scorecard link.',
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+app.get('/api/fantasy/scorecard-sync-status', async (req, res) => {
+  try {
+    const status = await getScorecardSyncStatus();
+    return res.json({
+      success: true,
+      ...status,
+    });
+  } catch (error) {
+    console.error('Failed to fetch scorecard sync status:', error);
+    return res.status(500).json({
+      error: 'Failed to fetch scorecard sync status.',
       details: error instanceof Error ? error.message : String(error),
     });
   }
