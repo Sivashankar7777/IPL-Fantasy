@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trophy, Upload, ChevronDown, ChevronUp, Users, Star, Search, ArrowLeft } from "lucide-react";
+import { Trophy, Upload, RefreshCw, ChevronDown, ChevronUp, Users, Star, Search, ArrowLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { BACKEND_URL } from "@/lib/config";
 
@@ -35,13 +35,17 @@ export default function FantasyDashboard() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [backendError, setBackendError] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isSyncingScorecard, setIsSyncingScorecard] = useState(false);
-  const [scorecardUrl, setScorecardUrl] = useState("https://www.cricbuzz.com/live-cricket-scorecard/114960/kkr-vs-rcb-1st-match-indian-premier-league-2025");
+  const [isUndoingLastMatch, setIsUndoingLastMatch] = useState(false);
+  const [scorecardUrl, setScorecardUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [scorecardStatus, setScorecardStatus] = useState<{
+    totalSyncedMatches: number;
+    lastSyncedMatch: { matchId: string; appliedAt: string | null } | null;
+  } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -68,27 +72,39 @@ export default function FantasyDashboard() {
     setLoading(true);
     try {
       const res = await fetch(`${BACKEND_URL}/api/fantasy/leaderboard`, { cache: 'no-store' });
-      if (!res.ok) {
-        throw new Error(`Backend returned ${res.status}`);
-      }
       const data = await res.json();
       setLeaderboard(Array.isArray(data) ? data : []);
-      setBackendError("");
     } catch (err: any) {
       setLeaderboard([]);
-      setBackendError(err?.message || `Could not reach backend at ${BACKEND_URL}`);
     } finally {
       setLoading(false);
     }
   };
 
+  const fetchScorecardStatus = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/fantasy/scorecard-sync-status`, { cache: "no-store" });
+      const data = await res.json();
+      if (data.success) {
+        setScorecardStatus({
+          totalSyncedMatches: Number(data.totalSyncedMatches || 0),
+          lastSyncedMatch: data.lastSyncedMatch || null,
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   useEffect(() => {
     fetchLeaderboard();
+    fetchScorecardStatus();
   }, []);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
       fetchLeaderboard();
+      fetchScorecardStatus();
     }, 15000);
 
     return () => window.clearInterval(interval);
@@ -113,10 +129,10 @@ export default function FantasyDashboard() {
           console.log("Upload Debug JSON:", data.debug);
           alert(`0 players mapped. Check the console for full JSON! \n\nTop Failures:\n${data.failed?.join('\n')}`);
         } else {
-          const createdSuffix = data.createdPlayers ? ` (${data.createdPlayers} new players created in the database)` : "";
-          alert(`Successfully imported ${data.mappedPlayers} drafted players to their respective franchises!${createdSuffix}`);
+          alert(`Successfully imported ${data.mappedPlayers} drafted players to their respective franchises!`);
         }
         fetchLeaderboard();
+        fetchScorecardStatus();
       } else {
         alert(`Upload Failed: ${data.error}`);
       }
@@ -135,11 +151,36 @@ export default function FantasyDashboard() {
       if (data.success) {
         alert("Success! All players have been detached and points cleared.");
         fetchLeaderboard();
+        fetchScorecardStatus();
       } else {
         alert("Failed to reset squads.");
       }
     } catch (e) {
       alert("Network error.");
+    }
+  };
+
+  const handleUndoLastMatch = async () => {
+    if (!confirm("Undo only the most recently uploaded match link? This will remove just that match's points.")) return;
+
+    setIsUndoingLastMatch(true);
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/fantasy/undo-last-scorecard-sync`, {
+        method: "POST",
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        alert(`Removed the latest uploaded match link (${data.matchId}).`);
+        fetchLeaderboard();
+        fetchScorecardStatus();
+      } else {
+        alert(data.error || "Failed to undo the previous match link.");
+      }
+    } catch (error: any) {
+      alert(`Network Error during undo: ${error.message}`);
+    } finally {
+      setIsUndoingLastMatch(false);
     }
   };
 
@@ -163,8 +204,10 @@ export default function FantasyDashboard() {
       if (!res.ok) {
         throw new Error(data.error || "Failed to sync scorecard.");
       }
-      setSyncMessage(`Synced match ${data.matchId}. Updated ${data.updatedPlayers} player records using ${data.source === "rapidapi" ? "RapidAPI" : "the Cricbuzz scorecard page"}.`);
+      setSyncMessage(`Synced match ${data.matchId}. Updated ${data.updatedPlayers} player records using ${data.source}.`);
+      setScorecardUrl("");
       await fetchLeaderboard();
+      await fetchScorecardStatus();
     } catch (error: any) {
       setSyncMessage("");
       alert(error.message || "Failed to sync scorecard.");
@@ -172,6 +215,13 @@ export default function FantasyDashboard() {
       setIsSyncingScorecard(false);
     }
   };
+
+  const lastSyncedLabel = scorecardStatus?.lastSyncedMatch?.appliedAt
+    ? new Date(scorecardStatus.lastSyncedMatch.appliedAt).toLocaleString("en-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : null;
 
   return (
     <div className="min-h-screen bg-ipl-navy p-8 font-sans text-white selection:bg-ipl-gold/30 relative overflow-hidden">
@@ -233,7 +283,7 @@ export default function FantasyDashboard() {
                   type="url"
                   value={scorecardUrl}
                   onChange={(e) => setScorecardUrl(e.target.value)}
-                  placeholder="Paste Cricbuzz scorecard link, for example KKR vs RCB"
+                  placeholder="Paste ESPN or Cricbuzz full scorecard link"
                   className="flex-1 rounded-2xl border border-white/10 bg-ipl-dark/80 px-5 py-4 text-sm text-white outline-none transition-all placeholder:text-ipl-silver/40 focus:border-ipl-gold/50"
                 />
                 <button
@@ -241,7 +291,7 @@ export default function FantasyDashboard() {
                   disabled={isSyncingScorecard}
                   className="rounded-2xl bg-gold-gradient px-6 py-4 text-sm font-black uppercase tracking-widest text-ipl-navy transition-all disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {isSyncingScorecard ? "Syncing..." : "Sync From Scorecard"}
+                  {isSyncingScorecard ? "Syncing Match Link..." : "Sync From Scorecard"}
                 </button>
               </div>
             )}
@@ -249,12 +299,6 @@ export default function FantasyDashboard() {
             {isAdmin && syncMessage && (
               <p className="relative z-10 mt-3 text-sm font-medium text-emerald-300">
                 {syncMessage}
-              </p>
-            )}
-
-            {backendError && (
-              <p className="relative z-10 mt-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-200">
-                Backend unavailable. Tried <span className="font-mono">{BACKEND_URL}</span>. {backendError}
               </p>
             )}
           </div>
@@ -285,16 +329,35 @@ export default function FantasyDashboard() {
           <div className="relative z-10">
             <p className="text-xs font-bold uppercase tracking-[0.36em] text-ipl-gold">Board Tools</p>
             <p className="mt-2 text-sm text-ipl-silver/75">Search squads, sync scorecards, upload final teams, or reset the board.</p>
+            <p className="mt-3 text-xs text-ipl-silver/60">
+              {scorecardStatus?.lastSyncedMatch
+                ? `Last synced match ${scorecardStatus.lastSyncedMatch.matchId}${lastSyncedLabel ? ` on ${lastSyncedLabel}` : ""}`
+                : "No scorecard links have been synced yet."}
+            </p>
           </div>
 
           <div className="relative z-10 flex flex-wrap justify-end items-center gap-4">
             {isAdmin && (
               <>
+                <button
+                  onClick={fetchLeaderboard}
+                  className="rounded-2xl bg-emerald-900/60 px-8 py-4 text-sm font-black uppercase tracking-widest text-emerald-300 transition-all shadow-lg flex items-center gap-3 border border-emerald-500/20 hover:bg-emerald-900/80"
+                >
+                  <RefreshCw size={18} />
+                  Sync Live Points
+                </button>
                 <button 
                   onClick={handleResetSquads}
                   className="glass-panel hover:bg-white/5 text-ipl-red font-black py-4 px-8 rounded-2xl text-sm border border-ipl-red/30 hover:border-ipl-red/50 transition-all shadow-lg flex items-center gap-3 uppercase tracking-widest"
                 >
                   Reset Squads
+                </button>
+                <button
+                  onClick={handleUndoLastMatch}
+                  disabled={isUndoingLastMatch}
+                  className="glass-panel hover:bg-white/5 text-ipl-gold font-black py-4 px-8 rounded-2xl text-sm border border-ipl-gold/30 hover:border-ipl-gold/50 transition-all shadow-lg flex items-center gap-3 uppercase tracking-widest disabled:opacity-60"
+                >
+                  {isUndoingLastMatch ? "Undoing..." : "Undo Previous Match"}
                 </button>
                 <label className={`cursor-pointer ${isUploading ? 'opacity-50' : 'hover:bg-white/5'} glass-panel text-ipl-gold font-black py-4 px-8 rounded-2xl text-sm border border-ipl-gold/30 transition-all shadow-lg flex items-center gap-3 uppercase tracking-widest`}>
                   {isUploading ? (
