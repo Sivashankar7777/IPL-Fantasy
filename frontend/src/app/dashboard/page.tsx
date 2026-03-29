@@ -68,8 +68,10 @@ export default function FantasyDashboard() {
   const totalPlayersTracked = safeLeaderboard.reduce((sum, team) => sum + (team.currentSquadPlayers?.length || 0), 0);
   const leader = safeLeaderboard[0];
 
-  const fetchLeaderboard = async () => {
-    setLoading(true);
+  const fetchLeaderboard = async ({ background = false }: { background?: boolean } = {}) => {
+    if (!background) {
+      setLoading(true);
+    }
     try {
       const res = await fetch(`${BACKEND_URL}/api/fantasy/leaderboard`, { cache: 'no-store' });
       const data = await res.json();
@@ -77,7 +79,9 @@ export default function FantasyDashboard() {
     } catch (err: any) {
       setLeaderboard([]);
     } finally {
-      setLoading(false);
+      if (!background) {
+        setLoading(false);
+      }
     }
   };
 
@@ -103,7 +107,7 @@ export default function FantasyDashboard() {
 
   useEffect(() => {
     const interval = window.setInterval(() => {
-      fetchLeaderboard();
+      fetchLeaderboard({ background: true });
       fetchScorecardStatus();
     }, 15000);
 
@@ -340,7 +344,7 @@ export default function FantasyDashboard() {
             {isAdmin && (
               <>
                 <button
-                  onClick={fetchLeaderboard}
+                  onClick={() => fetchLeaderboard()}
                   className="rounded-2xl bg-emerald-900/60 px-8 py-4 text-sm font-black uppercase tracking-widest text-emerald-300 transition-all shadow-lg flex items-center gap-3 border border-emerald-500/20 hover:bg-emerald-900/80"
                 >
                   <RefreshCw size={18} />
